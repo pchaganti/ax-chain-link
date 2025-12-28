@@ -274,6 +274,195 @@ cp -r /path/to/chainlink/.claude /your/project/
 cp -r /path/to/chainlink/.chainlink/rules /your/project/.chainlink/
 ```
 
+## Using Chainlink with Any AI Agent
+
+While chainlink includes native hooks for Claude Code, the context provider script allows integration with **any** AI coding assistant.
+
+### The Context Provider
+
+The context provider (`context-provider.py`) generates intelligent context that can be injected into any AI agent's prompts. It:
+
+- Detects project languages and applies relevant coding rules
+- Includes current session state and handoff notes
+- Lists open/ready issues
+- Shows project structure
+- Outputs in XML, Markdown, or JSON formats
+
+**Location:** `.chainlink/integrations/context-provider.py`
+
+### Quick Setup (Shell Aliases)
+
+Add these to your `~/.bashrc`, `~/.zshrc`, or PowerShell profile:
+
+**Bash/Zsh:**
+```bash
+# Generic AI wrapper - prepends chainlink context to any prompt
+ai() {
+    local ctx=$(python ~/.chainlink/integrations/context-provider.py 2>/dev/null)
+    echo -e "$ctx\n\n---\nUser: $*" | your-llm-cli
+}
+
+# Aider with chainlink context
+aider-cl() {
+    python ~/.chainlink/integrations/context-provider.py --format md > /tmp/chainlink-ctx.md
+    aider --read /tmp/chainlink-ctx.md "$@"
+}
+
+# Copy context to clipboard for pasting into web UIs
+chainlink-ctx() {
+    python ~/.chainlink/integrations/context-provider.py --clipboard
+}
+```
+
+**PowerShell:**
+```powershell
+# Generic AI wrapper
+function ai {
+    $ctx = python "$env:USERPROFILE\.chainlink\integrations\context-provider.py" 2>$null
+    "$ctx`n`n---`nUser: $($args -join ' ')" | your-llm-cli
+}
+
+# Copy context to clipboard
+function chainlink-ctx {
+    python "$env:USERPROFILE\.chainlink\integrations\context-provider.py" | Set-Clipboard
+}
+```
+
+### Context Provider Usage
+
+```bash
+# Full context (session + issues + rules + structure)
+python context-provider.py
+
+# Specific sections only
+python context-provider.py --session      # Session state only
+python context-provider.py --issues       # Issues only
+python context-provider.py --rules        # Coding rules only
+python context-provider.py --structure    # Project tree only
+
+# Output formats
+python context-provider.py --format xml   # XML tags (default, best for LLMs)
+python context-provider.py --format md    # Markdown (human readable)
+python context-provider.py --format json  # JSON (programmatic access)
+
+# Integration helpers
+python context-provider.py --prepend "fix the auth bug"  # Wrap a prompt
+python context-provider.py --clipboard                    # Copy to clipboard
+python context-provider.py --env                          # Output as env vars
+```
+
+### Agent-Specific Integration
+
+**Cursor:**
+```bash
+# Generate .cursorrules with chainlink context (run once per session)
+python context-provider.py --format md --rules > .cursorrules
+```
+
+**Aider:**
+```bash
+# Method 1: Read file
+python context-provider.py --format md > context.md
+aider --read context.md
+
+# Method 2: Wrapper script (see aliases above)
+aider-cl --model gpt-4
+```
+
+**Continue.dev (VS Code):**
+Add to `.continue/config.json`:
+```json
+{
+  "contextProviders": [
+    {
+      "name": "exec",
+      "params": {
+        "command": "python .chainlink/integrations/context-provider.py --format md"
+      }
+    }
+  ]
+}
+```
+
+**OpenAI API / Anthropic API direct calls:**
+```bash
+# Prepend context to your prompt
+CONTEXT=$(python context-provider.py)
+curl https://api.openai.com/v1/chat/completions \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -d "{
+    \"model\": \"gpt-4\",
+    \"messages\": [{\"role\": \"system\", \"content\": \"$CONTEXT\"},
+                   {\"role\": \"user\", \"content\": \"$PROMPT\"}]
+  }"
+```
+
+**Web UIs (ChatGPT, Claude.ai, etc.):**
+```bash
+# Copy to clipboard, then paste as first message
+python context-provider.py --clipboard
+```
+
+### What Gets Injected
+
+The context provider outputs:
+
+```xml
+<chainlink-session>
+Session #5 active
+Working on: #12 Fix authentication bug
+Handoff notes: Found issue in token refresh logic
+</chainlink-session>
+
+<chainlink-issues>
+Ready issues (unblocked):
+  #12   high     Fix authentication bug
+  #15   medium   Add dark mode toggle
+Open issues:
+  #18   low      Update documentation
+</chainlink-issues>
+
+<coding-rules>
+### General Requirements
+1. **NO STUBS**: Never write placeholder comments, empty bodies...
+2. **ERROR HANDLING**: Proper error handling everywhere...
+
+### Rust Best Practices
+- Use `?` operator over `.unwrap()`
+- Use `anyhow::Result` for application errors
+...
+</coding-rules>
+
+<workflow-reminder>
+- Use `chainlink session start` at the beginning of work
+- Use `chainlink session work <id>` to mark current focus
+- Add comments: `chainlink comment <id> "..."`
+- End with notes: `chainlink session end --notes "..."`
+</workflow-reminder>
+```
+
+### Per-Turn vs Static Context
+
+| Approach | Freshness | Setup |
+|----------|-----------|-------|
+| Shell alias wrapper | Per-turn (fresh every time) | Add alias to shell config |
+| `.cursorrules` | Static (regenerate manually) | Run script, paste output |
+| Claude Code hooks | Per-turn (automatic) | Built-in, no setup needed |
+
+For the best experience with non-Claude agents, use the shell alias approach to get fresh context on every prompt.
+
+## VS Code Extension
+
+Chainlink is also available as a VS Code extension that bundles the CLI binary:
+
+**Install:** Search "Chainlink Issue Tracker" in VS Code Extensions, or visit the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Dollspace-gay.chainlink-issue-tracker).
+
+**Features:**
+- Commands accessible from Command Palette (Ctrl+Shift+P)
+- Status bar indicator for daemon status
+- Auto-starts daemon when `.chainlink` project detected
+- Works on Windows, Linux, and macOS
+
 ## Development
 
 ```bash

@@ -8,6 +8,7 @@ A simple, lean issue tracker for AI-assisted development, integrated directly in
 - **Issue Tracking**: Create, update, and manage issues without leaving your editor
 - **Daemon Auto-Start**: Background daemon keeps session state fresh
 - **Cross-Platform**: Works on Windows, Linux, and macOS
+- **Agent-Agnostic**: Context provider script works with any AI coding assistant
 
 ## Installation
 
@@ -104,6 +105,99 @@ The daemon runs as a background process that:
 - Auto-flushes session state every 30 seconds
 - Self-terminates when VS Code closes (zombie prevention via stdin monitoring)
 - Writes logs to `.chainlink/daemon.log`
+
+## Using with Any AI Agent
+
+Chainlink includes a context provider script that works with **any** AI coding assistant, not just Claude Code.
+
+### Context Provider
+
+After running `Chainlink: Initialize Project`, you'll have a context provider at:
+```
+.chainlink/integrations/context-provider.py
+```
+
+This script generates intelligent context including:
+- Current session state and handoff notes
+- Open/ready issues
+- Project structure
+- Language-specific coding rules
+
+### Shell Aliases
+
+Add to your `~/.bashrc`, `~/.zshrc`, or PowerShell profile:
+
+**Bash/Zsh:**
+```bash
+# Copy chainlink context to clipboard
+chainlink-ctx() {
+    python .chainlink/integrations/context-provider.py --clipboard
+}
+
+# Aider with chainlink context
+aider-cl() {
+    python .chainlink/integrations/context-provider.py --format md > /tmp/cl-ctx.md
+    aider --read /tmp/cl-ctx.md "$@"
+}
+```
+
+**PowerShell:**
+```powershell
+function chainlink-ctx {
+    python .chainlink\integrations\context-provider.py | Set-Clipboard
+}
+```
+
+### Usage Examples
+
+```bash
+# Full context (XML format, best for LLMs)
+python .chainlink/integrations/context-provider.py
+
+# Markdown format (human readable)
+python .chainlink/integrations/context-provider.py --format md
+
+# Just coding rules
+python .chainlink/integrations/context-provider.py --rules
+
+# Copy to clipboard for web UIs
+python .chainlink/integrations/context-provider.py --clipboard
+
+# Generate .cursorrules for Cursor
+python .chainlink/integrations/context-provider.py --format md --rules > .cursorrules
+```
+
+### Agent-Specific Integration
+
+| Agent | Method |
+|-------|--------|
+| **Cursor** | `python context-provider.py --format md --rules > .cursorrules` |
+| **Aider** | `aider --read context.md` (generate context.md first) |
+| **Continue.dev** | Add exec context provider in `.continue/config.json` |
+| **Web UIs** | `--clipboard` then paste as first message |
+| **Claude Code** | Built-in hooks, no setup needed |
+
+### What Gets Injected
+
+```xml
+<chainlink-session>
+Session #5 active
+Working on: #12 Fix authentication bug
+</chainlink-session>
+
+<chainlink-issues>
+Ready issues (unblocked):
+  #12   high     Fix authentication bug
+</chainlink-issues>
+
+<coding-rules>
+### Rust Best Practices
+- Use `?` operator over `.unwrap()`
+...
+</coding-rules>
+```
+
+For full documentation, see the [main README](https://github.com/dollspace-gay/chainlink#using-chainlink-with-any-ai-agent).
 
 ## License
 
