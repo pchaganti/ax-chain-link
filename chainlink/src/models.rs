@@ -8,6 +8,7 @@ pub struct Issue {
     pub description: Option<String>,
     pub status: String,
     pub priority: String,
+    pub parent_id: Option<i64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub closed_at: Option<DateTime<Utc>>,

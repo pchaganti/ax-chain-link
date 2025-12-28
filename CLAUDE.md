@@ -28,6 +28,9 @@ chainlink create <title>              # Create issue (returns ID)
 chainlink create <title> -p high      # With priority (low/medium/high/critical)
 chainlink create <title> -d "desc"    # With description
 
+chainlink subissue <parent_id> <title>       # Create subissue under parent
+chainlink subissue <parent_id> <title> -p high  # Subissue with priority
+
 chainlink list                        # List open issues
 chainlink list -s all                 # List all issues
 chainlink list -s closed              # List closed issues
@@ -99,6 +102,7 @@ chainlink daemon stop                 # Stop daemon
 4. **End with handoff notes** before context gets compressed
 5. **Use `ready`** to find unblocked work
 6. **Use dependencies** to track blocking relationships
+7. **Use subissues** for large tasks (500+ lines of code)
 
 ## Storage
 

@@ -6,6 +6,7 @@ A simple, lean issue tracker CLI designed for AI-assisted development. Track tas
 
 - **Local-first**: All data stored in SQLite (`.chainlink/issues.db`)
 - **Session management**: Preserve context across Claude/AI sessions with handoff notes
+- **Subissues**: Break large tasks into smaller, trackable pieces
 - **Dependencies**: Track blocking relationships between issues
 - **Labels & priorities**: Organize issues with labels and priority levels
 - **No sync complexity**: No git hooks, no auto-push, just simple local storage
@@ -48,6 +49,8 @@ chainlink session end --notes "Fixed auth bug, dark mode is next"
 | `chainlink create <title>` | Create a new issue |
 | `chainlink create <title> -p high` | Create with priority (low/medium/high/critical) |
 | `chainlink create <title> -d "desc"` | Create with description |
+| `chainlink subissue <parent_id> <title>` | Create a subissue under a parent |
+| `chainlink subissue <parent_id> <title> -p high` | Subissue with priority |
 | `chainlink list` | List open issues |
 | `chainlink list -s all` | List all issues |
 | `chainlink list -s closed` | List closed issues |

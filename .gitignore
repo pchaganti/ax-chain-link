@@ -1,2 +1,4 @@
 /target/
 /chainlink/target/
+*.pyc
+__pycache__/

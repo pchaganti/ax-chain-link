@@ -36,6 +36,20 @@ enum Commands {
         priority: String,
     },
 
+    /// Create a subissue under a parent issue
+    Subissue {
+        /// Parent issue ID
+        parent: i64,
+        /// Subissue title
+        title: String,
+        /// Subissue description
+        #[arg(short, long)]
+        description: Option<String>,
+        /// Priority (low, medium, high, critical)
+        #[arg(short, long, default_value = "medium")]
+        priority: String,
+    },
+
     /// List issues
     List {
         /// Filter by status (open, closed, all)
@@ -222,6 +236,16 @@ fn main() -> Result<()> {
         } => {
             let db = get_db()?;
             commands::create::run(&db, &title, description.as_deref(), &priority)
+        }
+
+        Commands::Subissue {
+            parent,
+            title,
+            description,
+            priority,
+        } => {
+            let db = get_db()?;
+            commands::create::run_subissue(&db, parent, &title, description.as_deref(), &priority)
         }
 
         Commands::List {

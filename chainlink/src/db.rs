@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::models::{Comment, Issue, Session};
 
-const SCHEMA_VERSION: i32 = 1;
+const SCHEMA_VERSION: i32 = 2;
 
 pub struct Database {
     conn: Connection,
@@ -40,9 +40,11 @@ impl Database {
                     description TEXT,
                     status TEXT NOT NULL DEFAULT 'open',
                     priority TEXT NOT NULL DEFAULT 'medium',
+                    parent_id INTEGER,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    closed_at TEXT
+                    closed_at TEXT,
+                    FOREIGN KEY (parent_id) REFERENCES issues(id) ON DELETE CASCADE
                 );
 
                 -- Labels (many-to-many)
@@ -88,8 +90,15 @@ impl Database {
                 CREATE INDEX IF NOT EXISTS idx_comments_issue ON comments(issue_id);
                 CREATE INDEX IF NOT EXISTS idx_deps_blocker ON dependencies(blocker_id);
                 CREATE INDEX IF NOT EXISTS idx_deps_blocked ON dependencies(blocked_id);
+                CREATE INDEX IF NOT EXISTS idx_issues_parent ON issues(parent_id);
                 "#,
             )?;
+
+            // Migration: add parent_id column if upgrading from v1
+            let _ = self.conn.execute(
+                "ALTER TABLE issues ADD COLUMN parent_id INTEGER REFERENCES issues(id) ON DELETE CASCADE",
+                [],
+            );
 
             self.conn
                 .execute(&format!("PRAGMA user_version = {}", SCHEMA_VERSION), [])?;
@@ -103,17 +112,49 @@ impl Database {
 
     // Issue CRUD
     pub fn create_issue(&self, title: &str, description: Option<&str>, priority: &str) -> Result<i64> {
+        self.create_issue_with_parent(title, description, priority, None)
+    }
+
+    pub fn create_subissue(&self, parent_id: i64, title: &str, description: Option<&str>, priority: &str) -> Result<i64> {
+        self.create_issue_with_parent(title, description, priority, Some(parent_id))
+    }
+
+    fn create_issue_with_parent(&self, title: &str, description: Option<&str>, priority: &str, parent_id: Option<i64>) -> Result<i64> {
         let now = Utc::now().to_rfc3339();
         self.conn.execute(
-            "INSERT INTO issues (title, description, priority, status, created_at, updated_at) VALUES (?1, ?2, ?3, 'open', ?4, ?4)",
-            params![title, description, priority, now],
+            "INSERT INTO issues (title, description, priority, parent_id, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, 'open', ?5, ?5)",
+            params![title, description, priority, parent_id, now],
         )?;
         Ok(self.conn.last_insert_rowid())
     }
 
+    pub fn get_subissues(&self, parent_id: i64) -> Result<Vec<Issue>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, title, description, status, priority, parent_id, created_at, updated_at, closed_at FROM issues WHERE parent_id = ?1 ORDER BY id",
+        )?;
+
+        let issues = stmt
+            .query_map([parent_id], |row| {
+                Ok(Issue {
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    description: row.get(2)?,
+                    status: row.get(3)?,
+                    priority: row.get(4)?,
+                    parent_id: row.get(5)?,
+                    created_at: parse_datetime(row.get::<_, String>(6)?),
+                    updated_at: parse_datetime(row.get::<_, String>(7)?),
+                    closed_at: row.get::<_, Option<String>>(8)?.map(parse_datetime),
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(issues)
+    }
+
     pub fn get_issue(&self, id: i64) -> Result<Option<Issue>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, title, description, status, priority, created_at, updated_at, closed_at FROM issues WHERE id = ?1",
+            "SELECT id, title, description, status, priority, parent_id, created_at, updated_at, closed_at FROM issues WHERE id = ?1",
         )?;
 
         let issue = stmt
@@ -124,9 +165,10 @@ impl Database {
                     description: row.get(2)?,
                     status: row.get(3)?,
                     priority: row.get(4)?,
-                    created_at: parse_datetime(row.get::<_, String>(5)?),
-                    updated_at: parse_datetime(row.get::<_, String>(6)?),
-                    closed_at: row.get::<_, Option<String>>(7)?.map(parse_datetime),
+                    parent_id: row.get(5)?,
+                    created_at: parse_datetime(row.get::<_, String>(6)?),
+                    updated_at: parse_datetime(row.get::<_, String>(7)?),
+                    closed_at: row.get::<_, Option<String>>(8)?.map(parse_datetime),
                 })
             })
             .ok();
@@ -141,7 +183,7 @@ impl Database {
         priority_filter: Option<&str>,
     ) -> Result<Vec<Issue>> {
         let mut sql = String::from(
-            "SELECT DISTINCT i.id, i.title, i.description, i.status, i.priority, i.created_at, i.updated_at, i.closed_at FROM issues i",
+            "SELECT DISTINCT i.id, i.title, i.description, i.status, i.priority, i.parent_id, i.created_at, i.updated_at, i.closed_at FROM issues i",
         );
         let mut conditions = Vec::new();
         let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -185,9 +227,10 @@ impl Database {
                     description: row.get(2)?,
                     status: row.get(3)?,
                     priority: row.get(4)?,
-                    created_at: parse_datetime(row.get::<_, String>(5)?),
-                    updated_at: parse_datetime(row.get::<_, String>(6)?),
-                    closed_at: row.get::<_, Option<String>>(7)?.map(parse_datetime),
+                    parent_id: row.get(5)?,
+                    created_at: parse_datetime(row.get::<_, String>(6)?),
+                    updated_at: parse_datetime(row.get::<_, String>(7)?),
+                    closed_at: row.get::<_, Option<String>>(8)?.map(parse_datetime),
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -350,7 +393,7 @@ impl Database {
     pub fn list_blocked_issues(&self) -> Result<Vec<Issue>> {
         let mut stmt = self.conn.prepare(
             r#"
-            SELECT DISTINCT i.id, i.title, i.description, i.status, i.priority, i.created_at, i.updated_at, i.closed_at
+            SELECT DISTINCT i.id, i.title, i.description, i.status, i.priority, i.parent_id, i.created_at, i.updated_at, i.closed_at
             FROM issues i
             JOIN dependencies d ON i.id = d.blocked_id
             JOIN issues blocker ON d.blocker_id = blocker.id
@@ -367,9 +410,10 @@ impl Database {
                     description: row.get(2)?,
                     status: row.get(3)?,
                     priority: row.get(4)?,
-                    created_at: parse_datetime(row.get::<_, String>(5)?),
-                    updated_at: parse_datetime(row.get::<_, String>(6)?),
-                    closed_at: row.get::<_, Option<String>>(7)?.map(parse_datetime),
+                    parent_id: row.get(5)?,
+                    created_at: parse_datetime(row.get::<_, String>(6)?),
+                    updated_at: parse_datetime(row.get::<_, String>(7)?),
+                    closed_at: row.get::<_, Option<String>>(8)?.map(parse_datetime),
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -380,7 +424,7 @@ impl Database {
     pub fn list_ready_issues(&self) -> Result<Vec<Issue>> {
         let mut stmt = self.conn.prepare(
             r#"
-            SELECT i.id, i.title, i.description, i.status, i.priority, i.created_at, i.updated_at, i.closed_at
+            SELECT i.id, i.title, i.description, i.status, i.priority, i.parent_id, i.created_at, i.updated_at, i.closed_at
             FROM issues i
             WHERE i.status = 'open'
             AND NOT EXISTS (
@@ -400,9 +444,10 @@ impl Database {
                     description: row.get(2)?,
                     status: row.get(3)?,
                     priority: row.get(4)?,
-                    created_at: parse_datetime(row.get::<_, String>(5)?),
-                    updated_at: parse_datetime(row.get::<_, String>(6)?),
-                    closed_at: row.get::<_, Option<String>>(7)?.map(parse_datetime),
+                    parent_id: row.get(5)?,
+                    created_at: parse_datetime(row.get::<_, String>(6)?),
+                    updated_at: parse_datetime(row.get::<_, String>(7)?),
+                    closed_at: row.get::<_, Option<String>>(8)?.map(parse_datetime),
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
