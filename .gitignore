@@ -4,3 +4,4 @@
 __pycache__/
 .chainlink/
 beads/
+.claude/settings.local.json

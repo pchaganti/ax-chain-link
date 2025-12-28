@@ -7,7 +7,11 @@ Injects best practice reminders on every prompt submission.
 import json
 import sys
 import os
+import io
 from datetime import datetime
+
+# Fix Windows encoding issues with Unicode characters
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # Detect language from common file extensions in the working directory
 def detect_languages():
