@@ -9,6 +9,10 @@ A simple, lean issue tracker CLI designed for AI-assisted development. Track tas
 - **Subissues**: Break large tasks into smaller, trackable pieces
 - **Dependencies**: Track blocking relationships between issues
 - **Labels & priorities**: Organize issues with labels and priority levels
+- **Time tracking**: Start/stop timers to track time spent on issues
+- **Smart recommendations**: `chainlink next` suggests what to work on based on priority and progress
+- **Tree view**: Visualize issue hierarchy with `chainlink tree`
+- **Claude Code hooks**: Behavioral guardrails that inject best practices into AI sessions
 - **No sync complexity**: No git hooks, no auto-push, just simple local storage
 
 ## Installation
@@ -82,6 +86,22 @@ chainlink session end --notes "Fixed auth bug, dark mode is next"
 | `chainlink blocked` | List all blocked issues |
 | `chainlink ready` | List issues ready to work on (no blockers) |
 
+### Smart Navigation
+
+| Command | Description |
+|---------|-------------|
+| `chainlink next` | Recommend the next issue to work on (by priority/progress) |
+| `chainlink tree` | Show all issues in a tree hierarchy |
+| `chainlink tree -s open` | Show only open issues in tree view |
+
+### Time Tracking
+
+| Command | Description |
+|---------|-------------|
+| `chainlink start <id>` | Start a timer for an issue |
+| `chainlink stop` | Stop the current timer |
+| `chainlink timer` | Show current timer status |
+
 ### Session Management
 
 Sessions preserve context across AI assistant restarts.
@@ -135,6 +155,54 @@ Handoff notes saved.
 ## Storage
 
 All data is stored locally in `.chainlink/issues.db` (SQLite). No external services, no network requests.
+
+## Claude Code Hooks
+
+Chainlink includes behavioral hooks for [Claude Code](https://claude.com/claude-code) that inject best practice reminders into AI sessions. These hooks help ensure Claude follows coding standards without requiring manual prompting.
+
+### What the Hooks Do
+
+The hooks are located in `.claude/hooks/` and configured in `.claude/settings.json`:
+
+| Hook | Trigger | Purpose |
+|------|---------|---------|
+| `prompt-guard.py` | Every prompt | Injects language-specific best practices, reminds about error handling, security, and no stubs/dead code |
+| `post-edit-check.py` | After file edits | Reminds to verify changes compile and follow project patterns |
+| `session-start.py` | Session start/resume | Loads chainlink context and previous session handoff notes |
+
+### Behavioral Guardrails
+
+The hooks enforce these principles:
+
+1. **No Stubs**: Implement complete, working code - no placeholder functions or TODO comments
+2. **No Dead Code**: Identify incomplete features and complete them, or remove truly dead code
+3. **Full Features**: Implement complete features as requested, don't stop partway
+4. **Error Handling**: Proper error handling everywhere, no panics on bad input
+5. **Security**: Validate input, use parameterized queries, no command injection
+
+### Large Task Management
+
+When code will exceed 500 lines, the hooks guide Claude to:
+1. Create a parent issue for the feature
+2. Break it into subissues for trackable components
+3. Inform the user about the multi-part implementation
+4. Work on one subissue at a time
+
+### Language Detection
+
+The hooks auto-detect the project language(s) and inject relevant best practices:
+- **Rust**: Use `?` operator, `clippy`, parameterized SQL, avoid `.unwrap()`
+- **Python**: Type hints, proper exceptions, `pathlib`, context managers
+- **JavaScript/TypeScript**: `const`/`let`, async/await, strict mode, input validation
+- **Go**: Check errors, use `context.Context`, `defer` for cleanup
+
+### Installing Hooks in Other Projects
+
+Copy the `.claude/` directory to any project to enable the hooks:
+
+```bash
+cp -r /path/to/chainlink/.claude /your/project/
+```
 
 ## Development
 

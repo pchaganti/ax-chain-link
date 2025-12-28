@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::models::{Comment, Issue, Session};
 
-const SCHEMA_VERSION: i32 = 2;
+const SCHEMA_VERSION: i32 = 3;
 
 pub struct Database {
     conn: Connection,
@@ -83,6 +83,16 @@ impl Database {
                     FOREIGN KEY (active_issue_id) REFERENCES issues(id)
                 );
 
+                -- Time tracking
+                CREATE TABLE IF NOT EXISTS time_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    issue_id INTEGER NOT NULL,
+                    started_at TEXT NOT NULL,
+                    ended_at TEXT,
+                    duration_seconds INTEGER,
+                    FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
+                );
+
                 -- Indexes
                 CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status);
                 CREATE INDEX IF NOT EXISTS idx_issues_priority ON issues(priority);
@@ -91,6 +101,7 @@ impl Database {
                 CREATE INDEX IF NOT EXISTS idx_deps_blocker ON dependencies(blocker_id);
                 CREATE INDEX IF NOT EXISTS idx_deps_blocked ON dependencies(blocked_id);
                 CREATE INDEX IF NOT EXISTS idx_issues_parent ON issues(parent_id);
+                CREATE INDEX IF NOT EXISTS idx_time_entries_issue ON time_entries(issue_id);
                 "#,
             )?;
 
@@ -520,6 +531,71 @@ impl Database {
             params![issue_id, session_id],
         )?;
         Ok(rows > 0)
+    }
+
+    // Time tracking
+    pub fn start_timer(&self, issue_id: i64) -> Result<i64> {
+        let now = Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO time_entries (issue_id, started_at) VALUES (?1, ?2)",
+            params![issue_id, now],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn stop_timer(&self, issue_id: i64) -> Result<bool> {
+        let now = Utc::now();
+        let now_str = now.to_rfc3339();
+
+        // Get the active entry
+        let started_at: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT started_at FROM time_entries WHERE issue_id = ?1 AND ended_at IS NULL",
+                [issue_id],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if let Some(started) = started_at {
+            let start_dt = DateTime::parse_from_rfc3339(&started)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or(now);
+            let duration = now.signed_duration_since(start_dt).num_seconds();
+
+            let rows = self.conn.execute(
+                "UPDATE time_entries SET ended_at = ?1, duration_seconds = ?2 WHERE issue_id = ?3 AND ended_at IS NULL",
+                params![now_str, duration, issue_id],
+            )?;
+            Ok(rows > 0)
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn get_active_timer(&self) -> Result<Option<(i64, DateTime<Utc>)>> {
+        let result: Option<(i64, String)> = self
+            .conn
+            .query_row(
+                "SELECT issue_id, started_at FROM time_entries WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .ok();
+
+        Ok(result.map(|(id, started)| (id, parse_datetime(started))))
+    }
+
+    pub fn get_total_time(&self, issue_id: i64) -> Result<i64> {
+        let total: i64 = self
+            .conn
+            .query_row(
+                "SELECT COALESCE(SUM(duration_seconds), 0) FROM time_entries WHERE issue_id = ?1 AND duration_seconds IS NOT NULL",
+                [issue_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        Ok(total)
     }
 }
 

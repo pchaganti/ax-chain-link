@@ -151,6 +151,28 @@ enum Commands {
     /// List issues ready to work on (no open blockers)
     Ready,
 
+    /// Suggest the next issue to work on
+    Next,
+
+    /// Show issues as a tree hierarchy
+    Tree {
+        /// Filter by status (open, closed, all)
+        #[arg(short, long, default_value = "all")]
+        status: String,
+    },
+
+    /// Start a timer for an issue
+    Start {
+        /// Issue ID
+        id: i64,
+    },
+
+    /// Stop the current timer
+    Stop,
+
+    /// Show current timer status
+    Timer,
+
     /// Session management
     Session {
         #[command(subcommand)]
@@ -326,6 +348,31 @@ fn main() -> Result<()> {
         Commands::Ready => {
             let db = get_db()?;
             commands::deps::list_ready(&db)
+        }
+
+        Commands::Next => {
+            let db = get_db()?;
+            commands::next::run(&db)
+        }
+
+        Commands::Tree { status } => {
+            let db = get_db()?;
+            commands::tree::run(&db, Some(&status))
+        }
+
+        Commands::Start { id } => {
+            let db = get_db()?;
+            commands::timer::start(&db, id)
+        }
+
+        Commands::Stop => {
+            let db = get_db()?;
+            commands::timer::stop(&db)
+        }
+
+        Commands::Timer => {
+            let db = get_db()?;
+            commands::timer::status(&db)
         }
 
         Commands::Session { action } => {
