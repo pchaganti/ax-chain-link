@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 import { DaemonManager } from './daemon';
-import { validateBinaries } from './platform';
+import { validateBinaries, resolveBinaryPath } from './platform';
 
 let daemonManager: DaemonManager | null = null;
 let outputChannel: vscode.OutputChannel;
@@ -30,6 +32,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const binDir = path.join(context.extensionPath, 'bin');
     addToPath(context, binDir);
     outputChannel.appendLine(`Added to PATH: ${binDir}`);
+
+    // Install binary to user's bin directory for shells that bypass VS Code's environment
+    // (e.g., Git Bash spawned by Claude Code or other AI agents)
+    try {
+        const installed = await installToUserBin(context.extensionPath, outputChannel);
+        if (installed) {
+            outputChannel.appendLine(`Installed chainlink to user bin directory`);
+        }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        outputChannel.appendLine(`Note: Could not install to user bin: ${message}`);
+    }
 
     // Get workspace folder
     const workspaceFolder = getWorkspaceFolder();
@@ -330,5 +344,105 @@ function addToPath(context: vscode.ExtensionContext, binDir: string): void {
     // Also set for Windows Path (case variation)
     if (process.platform === 'win32') {
         envCollection.prepend('Path', binDir + separator);
+    }
+}
+
+/**
+ * Installs chainlink binary to user's personal bin directory.
+ * This ensures the binary is available in shells that bypass VS Code's environment,
+ * such as Git Bash spawned by Claude Code or other AI coding assistants.
+ *
+ * Target directories (in order of preference):
+ * - Windows: %USERPROFILE%\bin, %USERPROFILE%\.local\bin
+ * - Unix: ~/.local/bin, ~/bin
+ */
+async function installToUserBin(extensionPath: string, output: vscode.OutputChannel): Promise<boolean> {
+    const homeDir = os.homedir();
+    const isWindows = process.platform === 'win32';
+
+    // Candidate directories - these are commonly in PATH
+    const candidates = isWindows
+        ? [
+            path.join(homeDir, 'bin'),
+            path.join(homeDir, '.local', 'bin'),
+        ]
+        : [
+            path.join(homeDir, '.local', 'bin'),
+            path.join(homeDir, 'bin'),
+        ];
+
+    // Find source binary
+    const sourceBinary = resolveBinaryPath(extensionPath);
+    const targetName = isWindows ? 'chainlink.exe' : 'chainlink';
+
+    // Try each candidate directory
+    for (const binDir of candidates) {
+        // Check if directory exists (don't create it - user should have set it up)
+        if (!fs.existsSync(binDir)) {
+            continue;
+        }
+
+        const targetPath = path.join(binDir, targetName);
+
+        // Check if we need to update (skip if same version already installed)
+        if (fs.existsSync(targetPath)) {
+            const sourceStats = fs.statSync(sourceBinary);
+            const targetStats = fs.statSync(targetPath);
+
+            // Skip if same size (likely same version)
+            if (sourceStats.size === targetStats.size) {
+                output.appendLine(`Chainlink already installed at ${targetPath}`);
+                return true;
+            }
+        }
+
+        // Copy binary to user bin
+        try {
+            fs.copyFileSync(sourceBinary, targetPath);
+
+            // Ensure executable on Unix
+            if (!isWindows) {
+                fs.chmodSync(targetPath, 0o755);
+            }
+
+            output.appendLine(`Installed chainlink to ${targetPath}`);
+            return true;
+        } catch (err) {
+            output.appendLine(`Failed to copy to ${targetPath}: ${err}`);
+            // Try next candidate
+            continue;
+        }
+    }
+
+    // No suitable bin directory found - try to create ~/.local/bin as fallback
+    const fallbackDir = isWindows
+        ? path.join(homeDir, 'bin')
+        : path.join(homeDir, '.local', 'bin');
+
+    try {
+        fs.mkdirSync(fallbackDir, { recursive: true });
+        const targetPath = path.join(fallbackDir, targetName);
+        fs.copyFileSync(sourceBinary, targetPath);
+
+        if (!isWindows) {
+            fs.chmodSync(targetPath, 0o755);
+        }
+
+        output.appendLine(`Installed chainlink to ${targetPath}`);
+
+        // Warn user they may need to add to PATH
+        const pathHint = isWindows
+            ? `Add ${fallbackDir} to your PATH environment variable`
+            : `Add 'export PATH="$PATH:${fallbackDir}"' to your ~/.bashrc or ~/.zshrc`;
+
+        vscode.window.showInformationMessage(
+            `Chainlink installed to ${fallbackDir}. ${pathHint}`,
+            'OK'
+        );
+
+        return true;
+    } catch (err) {
+        output.appendLine(`Failed to create fallback directory: ${err}`);
+        return false;
     }
 }
