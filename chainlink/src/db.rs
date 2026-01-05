@@ -467,9 +467,7 @@ impl Database {
 
         // Check for circular dependencies before inserting
         if self.would_create_cycle(blocked_id, blocker_id)? {
-            anyhow::bail!(
-                "Adding this dependency would create a circular dependency chain"
-            );
+            anyhow::bail!("Adding this dependency would create a circular dependency chain");
         }
 
         let result = self.conn.execute(
