@@ -29,4 +29,6 @@ fn main() {
     println!("cargo:rerun-if-changed=../.chainlink/rules/scala.md");
     println!("cargo:rerun-if-changed=../.chainlink/rules/zig.md");
     println!("cargo:rerun-if-changed=../.chainlink/rules/odin.md");
+    println!("cargo:rerun-if-changed=../.chainlink/rules/elixir.md");
+    println!("cargo:rerun-if-changed=../.chainlink/rules/elixir-phoenix.md");
 }

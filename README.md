@@ -240,7 +240,7 @@ The hooks auto-detect the project language(s) and inject relevant best practices
 - **Python**: Type hints, proper exceptions, `pathlib`, context managers
 - **JavaScript/TypeScript**: `const`/`let`, async/await, strict mode, input validation
 - **Go**: Check errors, use `context.Context`, `defer` for cleanup
-- **Java, C, C++, C#, Ruby, PHP, Swift, Kotlin, Scala, Zig, Odin**: Language-specific best practices
+- **Java, C, C++, C#, Ruby, PHP, Swift, Kotlin, Scala, Zig, Odin, Elixir**: Language-specific best practices
 
 ### Customizable Rules
 
