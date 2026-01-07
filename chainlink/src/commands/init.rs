@@ -33,6 +33,8 @@ const RULE_KOTLIN: &str = include_str!("../../../.chainlink/rules/kotlin.md");
 const RULE_SCALA: &str = include_str!("../../../.chainlink/rules/scala.md");
 const RULE_ZIG: &str = include_str!("../../../.chainlink/rules/zig.md");
 const RULE_ODIN: &str = include_str!("../../../.chainlink/rules/odin.md");
+const RULE_ELIXIR: &str = include_str!("../../../.chainlink/rules/elixir.md");
+const RULE_ELIXIR_PHOENIX: &str = include_str!("../../../.chainlink/rules/elixir-phoenix.md");
 
 /// All rule files to deploy
 const RULE_FILES: &[(&str, &str)] = &[
@@ -56,6 +58,8 @@ const RULE_FILES: &[(&str, &str)] = &[
     ("scala.md", RULE_SCALA),
     ("zig.md", RULE_ZIG),
     ("odin.md", RULE_ODIN),
+    ("elixir.md", RULE_ELIXIR),
+    ("elixir-phoenix.md", RULE_ELIXIR_PHOENIX),
 ];
 
 pub fn run(path: &Path, force: bool) -> Result<()> {

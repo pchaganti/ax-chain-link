@@ -72,6 +72,8 @@ def load_all_rules(chainlink_dir):
         ('c.md', 'C'),
         ('cpp.md', 'C++'),
         ('csharp.md', 'C#'),
+        ('elixir.md', 'Elixir'),
+        ('elixir-phoenix.md', 'Elixir/Phoenix'),
         ('ruby.md', 'Ruby'),
         ('php.md', 'PHP'),
         ('swift.md', 'Swift'),
@@ -104,6 +106,8 @@ def detect_languages():
         '.c': 'C',
         '.cpp': 'C++',
         '.cs': 'C#',
+        '.ex': 'Elixir',
+        '.exs': 'Elixir',
         '.rb': 'Ruby',
         '.php': 'PHP',
         '.swift': 'Swift',
@@ -126,6 +130,7 @@ def detect_languages():
         'go.mod': 'Go',
         'pom.xml': 'Java',
         'build.gradle': 'Java',
+        'mix.lock': 'Elixir',
         'Gemfile': 'Ruby',
         'composer.json': 'PHP',
         'Package.swift': 'Swift',
@@ -140,6 +145,19 @@ def detect_languages():
                 check_dirs.append(subdir)
     except (PermissionError, OSError):
         pass
+
+    # Check for Elixir Phoenix in mix.exs
+    for check_dir in check_dirs:
+        mix_exs = os.path.join(check_dir, 'mix.exs')
+        if os.path.exists(mix_exs):
+            found.add('Elixir')
+            try:
+                with open(mix_exs, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if ':phoenix' in content:
+                        found.add('Elixir/Phoenix')
+            except (OSError, IOError):
+                pass
 
     for check_dir in check_dirs:
         for config_file, lang in config_indicators.items():
