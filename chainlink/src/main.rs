@@ -101,6 +101,9 @@ enum Commands {
     Close {
         /// Issue ID
         id: i64,
+        /// Skip changelog entry
+        #[arg(long)]
+        no_changelog: bool,
     },
 
     /// Reopen a closed issue
@@ -446,9 +449,10 @@ fn main() -> Result<()> {
             )
         }
 
-        Commands::Close { id } => {
+        Commands::Close { id, no_changelog } => {
             let db = get_db()?;
-            commands::status::close(&db, id)
+            let chainlink_dir = find_chainlink_dir()?;
+            commands::status::close(&db, id, !no_changelog, &chainlink_dir)
         }
 
         Commands::Reopen { id } => {
