@@ -211,10 +211,11 @@ enum Commands {
     /// Mark tests as run (resets test reminder)
     Tested,
 
-    /// Export issues to file
+    /// Export issues to JSON or markdown
     Export {
-        /// Output file path
-        output: String,
+        /// Output file path (defaults to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
         /// Format (json, markdown)
         #[arg(short, long, default_value = "json")]
         format: String,
@@ -542,10 +543,9 @@ fn main() -> Result<()> {
 
         Commands::Export { output, format } => {
             let db = get_db()?;
-            let path = std::path::Path::new(&output);
             match format.as_str() {
-                "json" => commands::export::run_json(&db, path),
-                "markdown" | "md" => commands::export::run_markdown(&db, path),
+                "json" => commands::export::run_json(&db, output.as_deref()),
+                "markdown" | "md" => commands::export::run_markdown(&db, output.as_deref()),
                 _ => {
                     bail!("Unknown format '{}'. Use 'json' or 'markdown'", format);
                 }

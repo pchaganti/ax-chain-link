@@ -880,7 +880,7 @@ fn test_export_json() {
     let export_path = dir.path().join("export.json");
     let (success, _, _) = run_chainlink(
         dir.path(),
-        &["export", export_path.to_str().unwrap(), "-f", "json"],
+        &["export", "-o", export_path.to_str().unwrap(), "-f", "json"],
     );
 
     assert!(success);
@@ -902,7 +902,7 @@ fn test_export_markdown() {
     let export_path = dir.path().join("export.md");
     let (success, _, _) = run_chainlink(
         dir.path(),
-        &["export", export_path.to_str().unwrap(), "-f", "markdown"],
+        &["export", "-o", export_path.to_str().unwrap(), "-f", "markdown"],
     );
 
     assert!(success);
@@ -922,7 +922,7 @@ fn test_import_json() {
     let export_path = dir.path().join("export.json");
     run_chainlink(
         dir.path(),
-        &["export", export_path.to_str().unwrap(), "-f", "json"],
+        &["export", "-o", export_path.to_str().unwrap(), "-f", "json"],
     );
 
     // Create a fresh chainlink instance and import
@@ -1569,7 +1569,7 @@ fn test_import_with_parent_relationships() {
     let export_path = dir.path().join("export.json");
     run_chainlink(
         dir.path(),
-        &["export", export_path.to_str().unwrap(), "-f", "json"],
+        &["export", "-o", export_path.to_str().unwrap(), "-f", "json"],
     );
 
     // Initialize a fresh directory and import
@@ -1607,7 +1607,7 @@ fn test_import_with_labels_and_comments() {
     let export_path = dir.path().join("export.json");
     run_chainlink(
         dir.path(),
-        &["export", export_path.to_str().unwrap(), "-f", "json"],
+        &["export", "-o", export_path.to_str().unwrap(), "-f", "json"],
     );
 
     // Import to fresh directory
@@ -1775,13 +1775,13 @@ fn test_export_markdown_format() {
     run_chainlink(dir.path(), &["comment", "1", "Test comment"]);
 
     let export_path = dir.path().join("export.md");
-    let (success, stdout, _) = run_chainlink(
+    let (success, _, stderr) = run_chainlink(
         dir.path(),
-        &["export", export_path.to_str().unwrap(), "-f", "markdown"],
+        &["export", "-o", export_path.to_str().unwrap(), "-f", "markdown"],
     );
 
     assert!(success);
-    assert!(stdout.contains("Exported") || stdout.contains("export"));
+    assert!(stderr.contains("Exported") || stderr.contains("export"));
 
     // Verify file exists and has markdown content
     let content = std::fs::read_to_string(&export_path).unwrap();
@@ -2226,7 +2226,7 @@ fn test_security_path_traversal_export() {
     ];
 
     for path in traversal_paths {
-        let (_, _, _) = run_chainlink(dir.path(), &["export", path, "-f", "json"]);
+        let (_, _, _) = run_chainlink(dir.path(), &["export", "-o", path, "-f", "json"]);
         // We don't assert success/failure - just that it doesn't crash
         // and doesn't actually write to system locations
     }
@@ -2353,7 +2353,7 @@ fn test_integrity_export_import_roundtrip() {
     let export_path = dir.path().join("backup.json");
     let (success, _, _) = run_chainlink(
         dir.path(),
-        &["export", export_path.to_str().unwrap(), "-f", "json"],
+        &["export", "-o", export_path.to_str().unwrap(), "-f", "json"],
     );
     assert!(success);
 

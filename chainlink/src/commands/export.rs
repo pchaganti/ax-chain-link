@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
+use std::io::{self, Write};
 
 use crate::db::Database;
 use crate::models::Issue;
@@ -59,7 +59,7 @@ fn export_issue(db: &Database, issue: &Issue) -> Result<ExportedIssue> {
     })
 }
 
-pub fn run_json(db: &Database, output_path: &Path) -> Result<()> {
+pub fn run_json(db: &Database, output_path: Option<&str>) -> Result<()> {
     let issues = db.list_issues(Some("all"), None, None)?;
 
     let exported: Vec<ExportedIssue> = issues
@@ -74,17 +74,21 @@ pub fn run_json(db: &Database, output_path: &Path) -> Result<()> {
     };
 
     let json = serde_json::to_string_pretty(&data)?;
-    fs::write(output_path, json).context("Failed to write export file")?;
 
-    println!(
-        "Exported {} issues to {}",
-        data.issues.len(),
-        output_path.display()
-    );
+    match output_path {
+        Some(path) => {
+            fs::write(path, json).context("Failed to write export file")?;
+            eprintln!("Exported {} issues to {}", data.issues.len(), path);
+        }
+        None => {
+            let mut stdout = io::stdout().lock();
+            writeln!(stdout, "{}", json)?;
+        }
+    }
     Ok(())
 }
 
-pub fn run_markdown(db: &Database, output_path: &Path) -> Result<()> {
+pub fn run_markdown(db: &Database, output_path: Option<&str>) -> Result<()> {
     let issues = db.list_issues(Some("all"), None, None)?;
     let mut md = String::new();
 
@@ -112,12 +116,16 @@ pub fn run_markdown(db: &Database, output_path: &Path) -> Result<()> {
         }
     }
 
-    fs::write(output_path, md).context("Failed to write export file")?;
-    println!(
-        "Exported {} issues to {}",
-        issues.len(),
-        output_path.display()
-    );
+    match output_path {
+        Some(path) => {
+            fs::write(path, md).context("Failed to write export file")?;
+            eprintln!("Exported {} issues to {}", issues.len(), path);
+        }
+        None => {
+            let mut stdout = io::stdout().lock();
+            writeln!(stdout, "{}", md)?;
+        }
+    }
     Ok(())
 }
 
