@@ -1,5 +1,7 @@
 # Chainlink
 
+![AI Generated](https://img.shields.io/badge/Code-AI_Generated-blue?style=flat-square&logo=probot&logoColor=white)
+
 A simple, lean issue tracker CLI designed for AI-assisted development. Track tasks across sessions with context preservation.
 
 ![Chainlink: The Missing Memory Layer for AI-Assisted Development](images/infographic.png)
