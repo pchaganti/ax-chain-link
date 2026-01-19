@@ -144,8 +144,7 @@ pub fn run(path: &Path, force: bool) -> Result<()> {
             .context("Failed to write safe-fetch-server.py")?;
 
         // Write .mcp.json to project root
-        fs::write(path.join(".mcp.json"), MCP_JSON)
-            .context("Failed to write .mcp.json")?;
+        fs::write(path.join(".mcp.json"), MCP_JSON).context("Failed to write .mcp.json")?;
 
         if force && claude_exists {
             println!("Updated {} with latest hooks", claude_dir.display());
