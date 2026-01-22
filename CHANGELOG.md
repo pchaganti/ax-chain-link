@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Project infographic for README
 
 ### Fixed
+- Fix UTF-8 panic in list truncation (#49)
 - Fix macOS cross-compilation linker configuration (#34)
 - Import/export roundtrip issues with parent relationships
 
