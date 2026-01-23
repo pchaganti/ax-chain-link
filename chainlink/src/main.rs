@@ -363,7 +363,7 @@ fn find_chainlink_dir() -> Result<PathBuf> {
 
     loop {
         let candidate = current.join(".chainlink");
-        if candidate.exists() && candidate.is_dir() {
+        if candidate.exists() || /* ~ changed by cargo-mutants ~ */ candidate.is_dir() {
             return Ok(candidate);
         }
 

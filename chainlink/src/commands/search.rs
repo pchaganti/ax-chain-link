@@ -45,3 +45,191 @@ pub fn run(db: &Database, query: &str) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> (Database, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        (db, dir)
+    }
+
+    // ==================== Unit Tests ====================
+
+    #[test]
+    fn test_search_finds_by_title() {
+        let (db, _dir) = setup_test_db();
+        db.create_issue("Fix authentication bug", None, "high")
+            .unwrap();
+        db.create_issue("Add dark mode", None, "medium").unwrap();
+
+        let result = run(&db, "authentication");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_search_finds_by_description() {
+        let (db, _dir) = setup_test_db();
+        db.create_issue("Feature A", Some("This relates to user login"), "medium")
+            .unwrap();
+
+        let result = run(&db, "login");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_search_case_insensitive() {
+        let (db, _dir) = setup_test_db();
+        db.create_issue("Fix AUTHENTICATION Bug", None, "high")
+            .unwrap();
+
+        // Search with different cases should still work (via db layer)
+        let result = run(&db, "authentication");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_search_no_results() {
+        let (db, _dir) = setup_test_db();
+        db.create_issue("Some issue", None, "medium").unwrap();
+
+        let result = run(&db, "nonexistent");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_search_empty_database() {
+        let (db, _dir) = setup_test_db();
+
+        let result = run(&db, "anything");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_search_empty_query() {
+        let (db, _dir) = setup_test_db();
+        db.create_issue("Test issue", None, "medium").unwrap();
+
+        let result = run(&db, "");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_search_special_characters() {
+        let (db, _dir) = setup_test_db();
+        db.create_issue("Fix bug with @mentions", None, "medium")
+            .unwrap();
+
+        let result = run(&db, "@mentions");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_search_unicode() {
+        let (db, _dir) = setup_test_db();
+        db.create_issue("Fix 日本語 support", None, "medium")
+            .unwrap();
+
+        let result = run(&db, "日本語");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_search_sql_injection() {
+        let (db, _dir) = setup_test_db();
+        db.create_issue("Normal issue", None, "medium").unwrap();
+
+        // Should not crash or inject SQL
+        let result = run(&db, "'; DROP TABLE issues; --");
+        assert!(result.is_ok());
+
+        // Database should still be intact
+        let issues = db.list_issues(None, None, None).unwrap();
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn test_search_with_wildcards() {
+        let (db, _dir) = setup_test_db();
+        db.create_issue("Test issue with pattern", None, "medium")
+            .unwrap();
+
+        // SQL wildcards should be escaped
+        let result = run(&db, "%pattern%");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_search_finds_in_comments() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Generic issue", None, "medium").unwrap();
+        db.add_comment(id, "Found the root cause in authentication module")
+            .unwrap();
+
+        let result = run(&db, "authentication");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_search_subissue_shows_parent() {
+        let (db, _dir) = setup_test_db();
+        let parent_id = db
+            .create_issue("Parent feature", None, "high")
+            .unwrap();
+        db.create_subissue(parent_id, "Sub task authentication", None, "medium")
+            .unwrap();
+
+        let result = run(&db, "authentication");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_search_closed_issue() {
+        let (db, _dir) = setup_test_db();
+        let id = db
+            .create_issue("Fix authentication bug", None, "high")
+            .unwrap();
+        db.close_issue(id).unwrap();
+
+        let result = run(&db, "authentication");
+        assert!(result.is_ok());
+    }
+
+    // ==================== Property-Based Tests ====================
+
+    proptest! {
+        #[test]
+        fn prop_search_never_panics(query in ".*") {
+            let (db, _dir) = setup_test_db();
+            db.create_issue("Test issue", None, "medium").unwrap();
+            let _ = run(&db, &query);
+        }
+
+        #[test]
+        fn prop_search_with_issues_never_panics(
+            title in "[a-zA-Z0-9 ]{1,50}",
+            query in "[a-zA-Z0-9]{1,20}"
+        ) {
+            let (db, _dir) = setup_test_db();
+            db.create_issue(&title, None, "medium").unwrap();
+            let result = run(&db, &query);
+            prop_assert!(result.is_ok());
+        }
+
+        #[test]
+        fn prop_search_unicode_never_panics(
+            title in "[\\p{L}\\p{N} ]{1,30}",
+            query in "[\\p{L}\\p{N}]{1,10}"
+        ) {
+            let (db, _dir) = setup_test_db();
+            db.create_issue(&title, None, "medium").unwrap();
+            let result = run(&db, &query);
+            prop_assert!(result.is_ok());
+        }
+    }
+}

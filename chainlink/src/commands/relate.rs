@@ -60,3 +60,145 @@ pub fn list(db: &Database, issue_id: i64) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> (Database, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        (db, dir)
+    }
+
+    #[test]
+    fn test_add_relation() {
+        let (db, _dir) = setup_test_db();
+        let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
+        let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
+
+        let result = add(&db, id1, id2);
+        assert!(result.is_ok());
+
+        let related = db.get_related_issues(id1).unwrap();
+        assert_eq!(related.len(), 1);
+        assert_eq!(related[0].id, id2);
+    }
+
+    #[test]
+    fn test_add_relation_bidirectional() {
+        let (db, _dir) = setup_test_db();
+        let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
+        let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
+
+        add(&db, id1, id2).unwrap();
+
+        let related1 = db.get_related_issues(id1).unwrap();
+        let related2 = db.get_related_issues(id2).unwrap();
+        assert_eq!(related1.len(), 1);
+        assert_eq!(related2.len(), 1);
+    }
+
+    #[test]
+    fn test_add_relation_nonexistent_issue() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Issue 1", None, "medium").unwrap();
+
+        let result = add(&db, id, 99999);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_add_duplicate_relation() {
+        let (db, _dir) = setup_test_db();
+        let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
+        let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
+
+        add(&db, id1, id2).unwrap();
+        let result = add(&db, id1, id2);
+        assert!(result.is_ok());
+
+        let related = db.get_related_issues(id1).unwrap();
+        assert_eq!(related.len(), 1);
+    }
+
+    #[test]
+    fn test_remove_relation() {
+        let (db, _dir) = setup_test_db();
+        let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
+        let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
+
+        add(&db, id1, id2).unwrap();
+        let result = remove(&db, id1, id2);
+        assert!(result.is_ok());
+
+        let related = db.get_related_issues(id1).unwrap();
+        assert_eq!(related.len(), 0);
+    }
+
+    #[test]
+    fn test_remove_nonexistent_relation() {
+        let (db, _dir) = setup_test_db();
+        let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
+        let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
+
+        let result = remove(&db, id1, id2);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_list_relations() {
+        let (db, _dir) = setup_test_db();
+        let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
+        let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
+        let id3 = db.create_issue("Issue 3", None, "medium").unwrap();
+
+        add(&db, id1, id2).unwrap();
+        add(&db, id1, id3).unwrap();
+
+        let result = list(&db, id1);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_list_relations_nonexistent() {
+        let (db, _dir) = setup_test_db();
+
+        let result = list(&db, 99999);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_list_no_relations() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Lonely issue", None, "medium").unwrap();
+
+        let result = list(&db, id);
+        assert!(result.is_ok());
+    }
+
+    proptest! {
+        #[test]
+        fn prop_add_remove_roundtrip(a in 0i64..3, b in 0i64..3) {
+            if a != b {
+                let (db, _dir) = setup_test_db();
+                let ids: Vec<i64> = (0..5).map(|i| db.create_issue(&format!("Issue {}", i), None, "medium").unwrap()).collect();
+                
+                let id1 = ids[a as usize % ids.len()];
+                let id2 = ids[b as usize % ids.len()];
+                
+                add(&db, id1, id2).unwrap();
+                let related = db.get_related_issues(id1).unwrap();
+                prop_assert!(!related.is_empty());
+                
+                remove(&db, id1, id2).unwrap();
+                let related = db.get_related_issues(id1).unwrap();
+                prop_assert!(related.is_empty());
+            }
+        }
+    }
+}

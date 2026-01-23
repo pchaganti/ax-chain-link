@@ -101,3 +101,210 @@ pub fn run(db: &Database, id: i64) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> (Database, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        (db, dir)
+    }
+
+    // ==================== Unit Tests ====================
+
+    #[test]
+    fn test_show_existing_issue() {
+        let (db, _dir) = setup_test_db();
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+
+        let result = run(&db, issue_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_nonexistent_issue() {
+        let (db, _dir) = setup_test_db();
+
+        let result = run(&db, 99999);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_show_issue_with_description() {
+        let (db, _dir) = setup_test_db();
+        let issue_id = db
+            .create_issue("Test issue", Some("A detailed description"), "high")
+            .unwrap();
+
+        let result = run(&db, issue_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_issue_with_labels() {
+        let (db, _dir) = setup_test_db();
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.add_label(issue_id, "bug").unwrap();
+        db.add_label(issue_id, "urgent").unwrap();
+
+        let result = run(&db, issue_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_issue_with_comments() {
+        let (db, _dir) = setup_test_db();
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.add_comment(issue_id, "First comment").unwrap();
+        db.add_comment(issue_id, "Second comment").unwrap();
+
+        let result = run(&db, issue_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_issue_with_blockers() {
+        let (db, _dir) = setup_test_db();
+        let blocker_id = db.create_issue("Blocker", None, "high").unwrap();
+        let issue_id = db.create_issue("Blocked issue", None, "medium").unwrap();
+        db.add_dependency(issue_id, blocker_id).unwrap();
+
+        let result = run(&db, issue_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_issue_with_subissues() {
+        let (db, _dir) = setup_test_db();
+        let parent_id = db.create_issue("Parent", None, "high").unwrap();
+        db.create_subissue(parent_id, "Child 1", None, "medium")
+            .unwrap();
+        db.create_subissue(parent_id, "Child 2", None, "low")
+            .unwrap();
+
+        let result = run(&db, parent_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_subissue_shows_parent() {
+        let (db, _dir) = setup_test_db();
+        let parent_id = db.create_issue("Parent", None, "high").unwrap();
+        let child_id = db
+            .create_subissue(parent_id, "Child", None, "medium")
+            .unwrap();
+
+        let result = run(&db, child_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_issue_with_related() {
+        let (db, _dir) = setup_test_db();
+        let issue1 = db.create_issue("Issue 1", None, "medium").unwrap();
+        let issue2 = db.create_issue("Issue 2", None, "medium").unwrap();
+        db.add_relation(issue1, issue2).unwrap();
+
+        let result = run(&db, issue1);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_closed_issue() {
+        let (db, _dir) = setup_test_db();
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.close_issue(issue_id).unwrap();
+
+        let result = run(&db, issue_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_issue_with_milestone() {
+        let (db, _dir) = setup_test_db();
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+        let milestone_id = db.create_milestone("v1.0", None).unwrap();
+        db.add_issue_to_milestone(milestone_id, issue_id).unwrap();
+
+        let result = run(&db, issue_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_issue_unicode_content() {
+        let (db, _dir) = setup_test_db();
+        let issue_id = db
+            .create_issue("测试问题 🐛", Some("描述 αβγ"), "medium")
+            .unwrap();
+        db.add_comment(issue_id, "评论 🎉").unwrap();
+        db.add_label(issue_id, "バグ").unwrap();
+
+        let result = run(&db, issue_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_issue_multiline_description() {
+        let (db, _dir) = setup_test_db();
+        let desc = "Line 1\nLine 2\n\nLine 4 after blank";
+        let issue_id = db.create_issue("Test", Some(desc), "medium").unwrap();
+
+        let result = run(&db, issue_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_issue_empty_description() {
+        let (db, _dir) = setup_test_db();
+        let issue_id = db.create_issue("Test", Some(""), "medium").unwrap();
+
+        let result = run(&db, issue_id);
+        assert!(result.is_ok());
+    }
+
+    // ==================== Property-Based Tests ====================
+
+    proptest! {
+        #[test]
+        fn prop_show_never_panics(title in "[a-zA-Z0-9 ]{1,50}") {
+            let (db, _dir) = setup_test_db();
+            let issue_id = db.create_issue(&title, None, "medium").unwrap();
+            let result = run(&db, issue_id);
+            prop_assert!(result.is_ok());
+        }
+
+        #[test]
+        fn prop_show_nonexistent_always_fails(issue_id in 1000i64..10000) {
+            let (db, _dir) = setup_test_db();
+            let result = run(&db, issue_id);
+            prop_assert!(result.is_err());
+        }
+
+        #[test]
+        fn prop_show_with_description_never_panics(
+            title in "[a-zA-Z0-9 ]{1,30}",
+            desc in "[a-zA-Z0-9 \n]{0,200}"
+        ) {
+            let (db, _dir) = setup_test_db();
+            let issue_id = db.create_issue(&title, Some(&desc), "medium").unwrap();
+            let result = run(&db, issue_id);
+            prop_assert!(result.is_ok());
+        }
+
+        #[test]
+        fn prop_show_unicode_never_panics(
+            title in "[\\p{L}\\p{N} ]{1,30}"
+        ) {
+            let (db, _dir) = setup_test_db();
+            let issue_id = db.create_issue(&title, None, "medium").unwrap();
+            let result = run(&db, issue_id);
+            prop_assert!(result.is_ok());
+        }
+    }
+}

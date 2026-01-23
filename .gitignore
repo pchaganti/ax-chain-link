@@ -18,3 +18,5 @@ vscode-extension/bin/chainlink-win.exe
 chainlink/fuzz/target/
 chainlink/fuzz/artifacts/
 chainlink/fuzz/corpus/
+/mutants.out/
+chainlink/mutants.out/

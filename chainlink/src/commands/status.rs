@@ -133,3 +133,270 @@ pub fn reopen(db: &Database, id: i64) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> (Database, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        (db, dir)
+    }
+
+    // ==================== Close Tests ====================
+
+    #[test]
+    fn test_close_existing_issue() {
+        let (db, _dir) = setup_test_db();
+        let chainlink_dir = _dir.path().join(".chainlink");
+        std::fs::create_dir_all(&chainlink_dir).unwrap();
+
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+
+        let result = close(&db, issue_id, false, &chainlink_dir);
+        assert!(result.is_ok());
+
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(issue.status, "closed");
+        assert!(issue.closed_at.is_some());
+    }
+
+    #[test]
+    fn test_close_nonexistent_issue() {
+        let (db, _dir) = setup_test_db();
+        let chainlink_dir = _dir.path().join(".chainlink");
+        std::fs::create_dir_all(&chainlink_dir).unwrap();
+
+        let result = close(&db, 99999, false, &chainlink_dir);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_close_already_closed_issue() {
+        let (db, _dir) = setup_test_db();
+        let chainlink_dir = _dir.path().join(".chainlink");
+        std::fs::create_dir_all(&chainlink_dir).unwrap();
+
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.close_issue(issue_id).unwrap();
+
+        // Closing again should be fine (idempotent at db level)
+        let result = close(&db, issue_id, false, &chainlink_dir);
+        assert!(result.is_ok());
+    }
+
+    // ==================== Reopen Tests ====================
+
+    #[test]
+    fn test_reopen_closed_issue() {
+        let (db, _dir) = setup_test_db();
+
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.close_issue(issue_id).unwrap();
+
+        let result = reopen(&db, issue_id);
+        assert!(result.is_ok());
+
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(issue.status, "open");
+        assert!(issue.closed_at.is_none());
+    }
+
+    #[test]
+    fn test_reopen_nonexistent_issue() {
+        let (db, _dir) = setup_test_db();
+
+        let result = reopen(&db, 99999);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_reopen_already_open_issue() {
+        let (db, _dir) = setup_test_db();
+
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+
+        // Reopening an open issue - succeeds (idempotent operation)
+        let result = reopen(&db, issue_id);
+        assert!(result.is_ok());
+
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(issue.status, "open");
+    }
+
+    // ==================== Changelog Category Tests ====================
+
+    #[test]
+    fn test_determine_changelog_category_bug() {
+        assert_eq!(
+            determine_changelog_category(&["bug".to_string()]),
+            "Fixed"
+        );
+        assert_eq!(
+            determine_changelog_category(&["fix".to_string()]),
+            "Fixed"
+        );
+        assert_eq!(
+            determine_changelog_category(&["bugfix".to_string()]),
+            "Fixed"
+        );
+    }
+
+    #[test]
+    fn test_determine_changelog_category_feature() {
+        assert_eq!(
+            determine_changelog_category(&["feature".to_string()]),
+            "Added"
+        );
+        assert_eq!(
+            determine_changelog_category(&["enhancement".to_string()]),
+            "Added"
+        );
+    }
+
+    #[test]
+    fn test_determine_changelog_category_breaking() {
+        assert_eq!(
+            determine_changelog_category(&["breaking".to_string()]),
+            "Changed"
+        );
+        assert_eq!(
+            determine_changelog_category(&["breaking-change".to_string()]),
+            "Changed"
+        );
+    }
+
+    #[test]
+    fn test_determine_changelog_category_other() {
+        assert_eq!(
+            determine_changelog_category(&["deprecated".to_string()]),
+            "Deprecated"
+        );
+        assert_eq!(
+            determine_changelog_category(&["removed".to_string()]),
+            "Removed"
+        );
+        assert_eq!(
+            determine_changelog_category(&["security".to_string()]),
+            "Security"
+        );
+    }
+
+    #[test]
+    fn test_determine_changelog_category_default() {
+        assert_eq!(
+            determine_changelog_category(&["unknown".to_string()]),
+            "Changed"
+        );
+        assert_eq!(determine_changelog_category(&[]), "Changed");
+    }
+
+    #[test]
+    fn test_determine_changelog_category_first_match_wins() {
+        // Bug comes before feature, so Fixed should win
+        assert_eq!(
+            determine_changelog_category(&["bug".to_string(), "feature".to_string()]),
+            "Fixed"
+        );
+    }
+
+    #[test]
+    fn test_determine_changelog_category_case_insensitive() {
+        assert_eq!(
+            determine_changelog_category(&["BUG".to_string()]),
+            "Fixed"
+        );
+        assert_eq!(
+            determine_changelog_category(&["Feature".to_string()]),
+            "Added"
+        );
+    }
+
+    // ==================== Close/Reopen Cycle Tests ====================
+
+    #[test]
+    fn test_close_reopen_cycle() {
+        let (db, _dir) = setup_test_db();
+        let chainlink_dir = _dir.path().join(".chainlink");
+        std::fs::create_dir_all(&chainlink_dir).unwrap();
+
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+
+        // Close
+        close(&db, issue_id, false, &chainlink_dir).unwrap();
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(issue.status, "closed");
+
+        // Reopen
+        reopen(&db, issue_id).unwrap();
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(issue.status, "open");
+
+        // Close again
+        close(&db, issue_id, false, &chainlink_dir).unwrap();
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(issue.status, "closed");
+    }
+
+    // ==================== Property-Based Tests ====================
+
+    proptest! {
+        #[test]
+        fn prop_close_sets_status_to_closed(title in "[a-zA-Z0-9 ]{1,50}") {
+            let (db, _dir) = setup_test_db();
+            let chainlink_dir = _dir.path().join(".chainlink");
+            std::fs::create_dir_all(&chainlink_dir).unwrap();
+
+            let issue_id = db.create_issue(&title, None, "medium").unwrap();
+            close(&db, issue_id, false, &chainlink_dir).unwrap();
+
+            let issue = db.get_issue(issue_id).unwrap().unwrap();
+            prop_assert_eq!(issue.status, "closed");
+        }
+
+        #[test]
+        fn prop_reopen_sets_status_to_open(title in "[a-zA-Z0-9 ]{1,50}") {
+            let (db, _dir) = setup_test_db();
+
+            let issue_id = db.create_issue(&title, None, "medium").unwrap();
+            db.close_issue(issue_id).unwrap();
+
+            reopen(&db, issue_id).unwrap();
+
+            let issue = db.get_issue(issue_id).unwrap().unwrap();
+            prop_assert_eq!(issue.status, "open");
+        }
+
+        #[test]
+        fn prop_nonexistent_issue_close_fails(issue_id in 1000i64..10000) {
+            let (db, _dir) = setup_test_db();
+            let chainlink_dir = _dir.path().join(".chainlink");
+            std::fs::create_dir_all(&chainlink_dir).unwrap();
+
+            let result = close(&db, issue_id, false, &chainlink_dir);
+            prop_assert!(result.is_err());
+        }
+
+        #[test]
+        fn prop_nonexistent_issue_reopen_fails(issue_id in 1000i64..10000) {
+            let (db, _dir) = setup_test_db();
+
+            let result = reopen(&db, issue_id);
+            prop_assert!(result.is_err());
+        }
+
+        #[test]
+        fn prop_changelog_category_always_returns_string(
+            labels in proptest::collection::vec("[a-zA-Z]{1,20}", 0..5)
+        ) {
+            let category = determine_changelog_category(&labels);
+            prop_assert!(!category.is_empty());
+        }
+    }
+}

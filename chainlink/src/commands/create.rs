@@ -138,3 +138,141 @@ pub fn run_subissue(
     println!("Created subissue #{} under #{}", id, parent_id);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    // ==================== Unit Tests ====================
+
+    #[test]
+    fn test_validate_priority_valid() {
+        assert!(validate_priority("low"));
+        assert!(validate_priority("medium"));
+        assert!(validate_priority("high"));
+        assert!(validate_priority("critical"));
+    }
+
+    #[test]
+    fn test_validate_priority_invalid() {
+        assert!(!validate_priority(""));
+        assert!(!validate_priority("urgent"));
+        assert!(!validate_priority("LOW")); // Case sensitive
+        assert!(!validate_priority("MEDIUM"));
+        assert!(!validate_priority("High"));
+        assert!(!validate_priority("CRITICAL"));
+        assert!(!validate_priority(" medium"));
+        assert!(!validate_priority("medium "));
+        assert!(!validate_priority("medium\n"));
+    }
+
+    #[test]
+    fn test_validate_priority_malicious() {
+        // Security: ensure no injection vectors
+        assert!(!validate_priority("'; DROP TABLE issues; --"));
+        assert!(!validate_priority("high\0medium"));
+        assert!(!validate_priority("medium; DELETE FROM issues"));
+        assert!(!validate_priority("<script>alert('xss')</script>"));
+    }
+
+    #[test]
+    fn test_get_template_exists() {
+        let bug = get_template("bug");
+        assert!(bug.is_some());
+        let template = bug.unwrap();
+        assert_eq!(template.name, "bug");
+        assert_eq!(template.priority, "high");
+        assert_eq!(template.label, "bug");
+        assert!(template.description_prefix.is_some());
+    }
+
+    #[test]
+    fn test_get_template_all_templates() {
+        for name in ["bug", "feature", "refactor", "research"] {
+            let template = get_template(name);
+            assert!(template.is_some(), "Template '{}' should exist", name);
+        }
+    }
+
+    #[test]
+    fn test_get_template_not_found() {
+        assert!(get_template("nonexistent").is_none());
+        assert!(get_template("").is_none());
+        assert!(get_template("Bug").is_none()); // Case sensitive
+        assert!(get_template("BUG").is_none());
+    }
+
+    #[test]
+    fn test_list_templates() {
+        let templates = list_templates();
+        assert!(templates.contains(&"bug"));
+        assert!(templates.contains(&"feature"));
+        assert!(templates.contains(&"refactor"));
+        assert!(templates.contains(&"research"));
+        assert_eq!(templates.len(), 4);
+    }
+
+    #[test]
+    fn test_template_fields() {
+        // Verify all templates have required fields
+        for template in TEMPLATES {
+            assert!(!template.name.is_empty());
+            assert!(validate_priority(template.priority));
+            assert!(!template.label.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_template_bug_description_prefix() {
+        let template = get_template("bug").unwrap();
+        let prefix = template.description_prefix.unwrap();
+        assert!(prefix.contains("Steps to reproduce"));
+        assert!(prefix.contains("Expected"));
+        assert!(prefix.contains("Actual"));
+    }
+
+    #[test]
+    fn test_template_feature_description_prefix() {
+        let template = get_template("feature").unwrap();
+        let prefix = template.description_prefix.unwrap();
+        assert!(prefix.contains("Goal"));
+        assert!(prefix.contains("Acceptance criteria"));
+    }
+
+    // ==================== Property-Based Tests ====================
+
+    proptest! {
+        #[test]
+        fn prop_validate_priority_never_panics(s in ".*") {
+            let _ = validate_priority(&s);
+        }
+
+        #[test]
+        fn prop_get_template_never_panics(s in ".*") {
+            let _ = get_template(&s);
+        }
+
+        #[test]
+        fn prop_valid_priorities_always_validate(priority in "low|medium|high|critical") {
+            prop_assert!(validate_priority(&priority));
+        }
+
+        #[test]
+        fn prop_invalid_priorities_never_validate(
+            priority in "[a-zA-Z]{1,20}"
+                .prop_filter("Exclude valid priorities", |s| {
+                    !["low", "medium", "high", "critical"].contains(&s.as_str())
+                })
+        ) {
+            prop_assert!(!validate_priority(&priority));
+        }
+
+        #[test]
+        fn prop_template_names_consistent(name in "bug|feature|refactor|research") {
+            let template = get_template(&name);
+            prop_assert!(template.is_some());
+            prop_assert_eq!(template.unwrap().name, name.as_str());
+        }
+    }
+}

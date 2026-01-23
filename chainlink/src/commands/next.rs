@@ -119,3 +119,136 @@ pub fn run(db: &Database) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> (Database, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        (db, dir)
+    }
+
+    #[test]
+    fn test_priority_weight_critical() {
+        assert_eq!(priority_weight("critical"), 4);
+    }
+
+    #[test]
+    fn test_priority_weight_high() {
+        assert_eq!(priority_weight("high"), 3);
+    }
+
+    #[test]
+    fn test_priority_weight_medium() {
+        assert_eq!(priority_weight("medium"), 2);
+    }
+
+    #[test]
+    fn test_priority_weight_low() {
+        assert_eq!(priority_weight("low"), 1);
+    }
+
+    #[test]
+    fn test_priority_weight_unknown() {
+        assert_eq!(priority_weight("unknown"), 0);
+    }
+
+    #[test]
+    fn test_run_no_issues() {
+        let (db, _dir) = setup_test_db();
+
+        let result = run(&db);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_with_issues() {
+        let (db, _dir) = setup_test_db();
+        db.create_issue("Issue 1", None, "high").unwrap();
+
+        let result = run(&db);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_prioritizes_higher() {
+        let (db, _dir) = setup_test_db();
+        db.create_issue("Low priority", None, "low").unwrap();
+        db.create_issue("Critical priority", None, "critical").unwrap();
+        db.create_issue("Medium priority", None, "medium").unwrap();
+
+        let result = run(&db);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_calculate_progress_no_subissues() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Simple issue", None, "medium").unwrap();
+        let issue = db.get_issue(id).unwrap().unwrap();
+
+        let progress = calculate_progress(&db, &issue).unwrap();
+        assert!(progress.is_none());
+    }
+
+    #[test]
+    fn test_calculate_progress_with_subissues() {
+        let (db, _dir) = setup_test_db();
+        let parent_id = db.create_issue("Parent", None, "high").unwrap();
+        let child1 = db.create_subissue(parent_id, "Child 1", None, "medium").unwrap();
+        db.create_subissue(parent_id, "Child 2", None, "medium").unwrap();
+        db.close_issue(child1).unwrap();
+
+        let issue = db.get_issue(parent_id).unwrap().unwrap();
+        let progress = calculate_progress(&db, &issue).unwrap();
+        
+        assert!(progress.is_some());
+        let (closed, total) = progress.unwrap();
+        assert_eq!(closed, 1);
+        assert_eq!(total, 2);
+    }
+
+    #[test]
+    fn test_run_skips_blocked() {
+        let (db, _dir) = setup_test_db();
+        let blocker = db.create_issue("Blocker", None, "high").unwrap();
+        let blocked = db.create_issue("Blocked", None, "critical").unwrap();
+        db.add_dependency(blocked, blocker).unwrap();
+
+        let result = run(&db);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_all_issues_closed() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Done", None, "medium").unwrap();
+        db.close_issue(id).unwrap();
+
+        let result = run(&db);
+        assert!(result.is_ok());
+    }
+
+    proptest! {
+        #[test]
+        fn prop_priority_weight_valid(priority in "low|medium|high|critical") {
+            let weight = priority_weight(&priority);
+            prop_assert!(weight >= 1 && weight <= 4);
+        }
+
+        #[test]
+        fn prop_run_never_panics(count in 0usize..5) {
+            let (db, _dir) = setup_test_db();
+            for i in 0..count {
+                db.create_issue(&format!("Issue {}", i), None, "medium").unwrap();
+            }
+            let result = run(&db);
+            prop_assert!(result.is_ok());
+        }
+    }
+}

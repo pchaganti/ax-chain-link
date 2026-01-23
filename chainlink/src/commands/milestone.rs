@@ -126,3 +126,137 @@ pub fn delete(db: &Database, id: i64) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> (Database, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        (db, dir)
+    }
+
+    #[test]
+    fn test_create_milestone() {
+        let (db, _dir) = setup_test_db();
+        let result = create(&db, "v1.0", None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_milestone_with_description() {
+        let (db, _dir) = setup_test_db();
+        let result = create(&db, "v1.0", Some("First release"));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_list_milestones_empty() {
+        let (db, _dir) = setup_test_db();
+        let result = list(&db, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_list_milestones() {
+        let (db, _dir) = setup_test_db();
+        db.create_milestone("v1.0", None).unwrap();
+        db.create_milestone("v2.0", None).unwrap();
+        let result = list(&db, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_milestone() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_milestone("v1.0", Some("Description")).unwrap();
+        let result = show(&db, id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_show_nonexistent_milestone() {
+        let (db, _dir) = setup_test_db();
+        let result = show(&db, 99999);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_add_issue_to_milestone() {
+        let (db, _dir) = setup_test_db();
+        let milestone_id = db.create_milestone("v1.0", None).unwrap();
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+        let result = add(&db, milestone_id, &[issue_id]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_add_to_nonexistent_milestone() {
+        let (db, _dir) = setup_test_db();
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+        let result = add(&db, 99999, &[issue_id]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_remove_issue_from_milestone() {
+        let (db, _dir) = setup_test_db();
+        let milestone_id = db.create_milestone("v1.0", None).unwrap();
+        let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.add_issue_to_milestone(milestone_id, issue_id).unwrap();
+        let result = remove(&db, milestone_id, issue_id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_close_milestone() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_milestone("v1.0", None).unwrap();
+        let result = close(&db, id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_delete_milestone() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_milestone("v1.0", None).unwrap();
+        let result = delete(&db, id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_milestone_progress() {
+        let (db, _dir) = setup_test_db();
+        let milestone_id = db.create_milestone("v1.0", None).unwrap();
+        let issue1 = db.create_issue("Issue 1", None, "medium").unwrap();
+        let issue2 = db.create_issue("Issue 2", None, "medium").unwrap();
+        db.add_issue_to_milestone(milestone_id, issue1).unwrap();
+        db.add_issue_to_milestone(milestone_id, issue2).unwrap();
+        db.close_issue(issue1).unwrap();
+        let result = show(&db, milestone_id);
+        assert!(result.is_ok());
+    }
+
+    proptest! {
+        #[test]
+        fn prop_create_milestone_never_panics(name in "[a-zA-Z0-9 ]{1,30}") {
+            let (db, _dir) = setup_test_db();
+            let result = create(&db, &name, None);
+            prop_assert!(result.is_ok());
+        }
+
+        #[test]
+        fn prop_list_never_panics(count in 0usize..5) {
+            let (db, _dir) = setup_test_db();
+            for i in 0..count {
+                db.create_milestone(&format!("v{}.0", i), None).unwrap();
+            }
+            let result = list(&db, None);
+            prop_assert!(result.is_ok());
+        }
+    }
+}

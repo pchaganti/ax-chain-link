@@ -59,3 +59,10 @@ path = "fuzz_targets/fuzz_state_machine.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_cli_output"
+path = "fuzz_targets/fuzz_cli_output.rs"
+test = false
+doc = false
+bench = false

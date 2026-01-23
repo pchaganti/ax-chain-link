@@ -160,3 +160,201 @@ pub fn run(path: &Path, force: bool) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_run_fresh_init() {
+        let dir = tempdir().unwrap();
+        let result = run(dir.path(), false);
+        assert!(result.is_ok());
+
+        // Verify directories created
+        assert!(dir.path().join(".chainlink").exists());
+        assert!(dir.path().join(".chainlink/rules").exists());
+        assert!(dir.path().join(".chainlink/issues.db").exists());
+        assert!(dir.path().join(".claude").exists());
+        assert!(dir.path().join(".claude/hooks").exists());
+        assert!(dir.path().join(".claude/mcp").exists());
+    }
+
+    #[test]
+    fn test_run_creates_hook_files() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        // Verify hook files
+        assert!(dir.path().join(".claude/settings.json").exists());
+        assert!(dir.path().join(".claude/hooks/prompt-guard.py").exists());
+        assert!(dir.path().join(".claude/hooks/post-edit-check.py").exists());
+        assert!(dir.path().join(".claude/hooks/session-start.py").exists());
+        assert!(dir.path().join(".claude/hooks/pre-web-check.py").exists());
+        assert!(dir.path().join(".claude/mcp/safe-fetch-server.py").exists());
+        assert!(dir.path().join(".mcp.json").exists());
+    }
+
+    #[test]
+    fn test_run_creates_rule_files() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        let rules_dir = dir.path().join(".chainlink/rules");
+        assert!(rules_dir.join("global.md").exists());
+        assert!(rules_dir.join("project.md").exists());
+        assert!(rules_dir.join("rust.md").exists());
+        assert!(rules_dir.join("python.md").exists());
+        assert!(rules_dir.join("javascript.md").exists());
+        assert!(rules_dir.join("typescript.md").exists());
+    }
+
+    #[test]
+    fn test_run_already_initialized_no_force() {
+        let dir = tempdir().unwrap();
+
+        // First init
+        run(dir.path(), false).unwrap();
+
+        // Second init without force - should succeed but not recreate
+        let result = run(dir.path(), false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_force_update() {
+        let dir = tempdir().unwrap();
+
+        // First init
+        run(dir.path(), false).unwrap();
+
+        // Modify a hook file
+        let hook_path = dir.path().join(".claude/hooks/prompt-guard.py");
+        fs::write(&hook_path, "# modified").unwrap();
+
+        // Force update
+        run(dir.path(), true).unwrap();
+
+        // Verify file was restored
+        let content = fs::read_to_string(&hook_path).unwrap();
+        assert_ne!(content, "# modified");
+        assert!(content.contains("python") || content.contains("def") || content.len() > 20);
+    }
+
+    #[test]
+    fn test_run_partial_init_chainlink_only() {
+        let dir = tempdir().unwrap();
+
+        // Create only .chainlink directory
+        fs::create_dir_all(dir.path().join(".chainlink")).unwrap();
+
+        let result = run(dir.path(), false);
+        assert!(result.is_ok());
+
+        // .claude should now exist
+        assert!(dir.path().join(".claude").exists());
+    }
+
+    #[test]
+    fn test_run_partial_init_claude_only() {
+        let dir = tempdir().unwrap();
+
+        // Create only .claude directory
+        fs::create_dir_all(dir.path().join(".claude")).unwrap();
+
+        let result = run(dir.path(), false);
+        assert!(result.is_ok());
+
+        // .chainlink should now exist
+        assert!(dir.path().join(".chainlink").exists());
+    }
+
+    #[test]
+    fn test_run_database_usable() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        // Open the created database and verify it works
+        let db_path = dir.path().join(".chainlink/issues.db");
+        let db = Database::open(&db_path).unwrap();
+
+        // Should be able to create an issue
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        assert!(id > 0);
+    }
+
+    #[test]
+    fn test_run_rule_files_not_empty() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        let rules_dir = dir.path().join(".chainlink/rules");
+
+        // Verify rule files have content
+        let global = fs::read_to_string(rules_dir.join("global.md")).unwrap();
+        assert!(!global.is_empty());
+
+        let rust = fs::read_to_string(rules_dir.join("rust.md")).unwrap();
+        assert!(!rust.is_empty());
+    }
+
+    #[test]
+    fn test_run_force_updates_rules() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        // Modify a rule file
+        let rule_path = dir.path().join(".chainlink/rules/global.md");
+        fs::write(&rule_path, "# modified rule").unwrap();
+
+        // Force update
+        run(dir.path(), true).unwrap();
+
+        // Verify file was restored
+        let content = fs::read_to_string(&rule_path).unwrap();
+        assert_ne!(content, "# modified rule");
+    }
+
+    #[test]
+    fn test_run_idempotent_with_force() {
+        let dir = tempdir().unwrap();
+
+        // Multiple force runs should all succeed
+        for _ in 0..3 {
+            let result = run(dir.path(), true);
+            assert!(result.is_ok());
+        }
+
+        // All files should still exist
+        assert!(dir.path().join(".chainlink/issues.db").exists());
+        assert!(dir.path().join(".claude/settings.json").exists());
+    }
+
+    #[test]
+    fn test_embedded_constants_not_empty() {
+        // Verify all embedded constants have content
+        assert!(!SETTINGS_JSON.is_empty());
+        assert!(!PROMPT_GUARD_PY.is_empty());
+        assert!(!POST_EDIT_CHECK_PY.is_empty());
+        assert!(!SESSION_START_PY.is_empty());
+        assert!(!PRE_WEB_CHECK_PY.is_empty());
+        assert!(!SAFE_FETCH_SERVER_PY.is_empty());
+        assert!(!MCP_JSON.is_empty());
+        assert!(!SANITIZE_PATTERNS.is_empty());
+        assert!(!RULE_GLOBAL.is_empty());
+        assert!(!RULE_RUST.is_empty());
+    }
+
+    #[test]
+    fn test_rule_files_count() {
+        // Verify we have the expected number of rule files
+        assert!(RULE_FILES.len() >= 20);
+
+        // All should have content
+        for (name, content) in RULE_FILES {
+            assert!(!name.is_empty(), "Rule file name should not be empty");
+            assert!(!content.is_empty(), "Rule file {} should not be empty", name);
+        }
+    }
+}

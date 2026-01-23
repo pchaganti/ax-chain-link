@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- Add comprehensive edge case testing (proptest, CLI fuzzing, Unicode E2E) (#50)
 - Improve session management with auto-start and stronger rules (#48)
 - Add sanitizing MCP server for safe web fetching (#47)
 - Add macOS binary support to VSCode extension with cross-compilation (#32)
@@ -16,6 +17,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `chainlink export` now outputs to stdout by default, use `-o` for file output
 
 ### Changed
+- Add unit tests for session.rs command (#64)
+- Add security-focused tests (#82)
+- Add unit tests for show.rs command (#58)
+- Add unit tests for delete.rs command (#57)
+- Add unit tests for update.rs command (#56)
+- Add unit tests for label.rs command (#61)
+- Add unit tests for status.rs command (#60)
+- Add unit tests for search.rs command (#59)
+- Add unit tests for models.rs (#75)
+- Add unit tests for comment.rs command (#62)
+- Add unit tests for create.rs command (#55)
+- Add Unicode E2E integration tests (#53)
+- Add CLI-layer fuzz target for list/show output (#52)
+- Add proptest for string handling functions (#51)
 - Issue titles are now expected to be changelog-ready (verb + description)
 
 ## [1.4] - 2026-01-08

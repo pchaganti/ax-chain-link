@@ -74,3 +74,142 @@ pub fn archive_older(db: &Database, days: i64) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> (Database, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        (db, dir)
+    }
+
+    #[test]
+    fn test_archive_closed_issue() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.close_issue(id).unwrap();
+
+        let result = archive(&db, id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_archive_open_issue_fails() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+
+        let result = archive(&db, id);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("only archive closed"));
+    }
+
+    #[test]
+    fn test_archive_nonexistent_fails() {
+        let (db, _dir) = setup_test_db();
+
+        let result = archive(&db, 99999);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_unarchive_issue() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.close_issue(id).unwrap();
+        archive(&db, id).unwrap();
+
+        let result = unarchive(&db, id);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_unarchive_not_archived() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+
+        let result = unarchive(&db, id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_list_empty() {
+        let (db, _dir) = setup_test_db();
+
+        let result = list(&db);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_list_with_archived() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.close_issue(id).unwrap();
+        archive(&db, id).unwrap();
+
+        let result = list(&db);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_archive_older_none() {
+        let (db, _dir) = setup_test_db();
+
+        let result = archive_older(&db, 30);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_archive_unarchive_roundtrip() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.close_issue(id).unwrap();
+
+        archive(&db, id).unwrap();
+        let archived = db.list_archived_issues().unwrap();
+        assert!(archived.iter().any(|i| i.id == id));
+
+        unarchive(&db, id).unwrap();
+        let archived = db.list_archived_issues().unwrap();
+        assert!(!archived.iter().any(|i| i.id == id));
+    }
+
+    #[test]
+    fn test_archived_issue_not_in_open_or_closed_list() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.close_issue(id).unwrap();
+        archive(&db, id).unwrap();
+
+        let open_issues = db.list_issues(Some("open"), None, None).unwrap();
+        let closed_issues = db.list_issues(Some("closed"), None, None).unwrap();
+        assert!(!open_issues.iter().any(|i| i.id == id));
+        assert!(!closed_issues.iter().any(|i| i.id == id));
+    }
+
+    proptest! {
+        #[test]
+        fn prop_archive_requires_closed(title in "[a-zA-Z0-9 ]{1,30}") {
+            let (db, _dir) = setup_test_db();
+            let id = db.create_issue(&title, None, "medium").unwrap();
+            
+            let result = archive(&db, id);
+            prop_assert!(result.is_err());
+        }
+
+        #[test]
+        fn prop_archive_closed_succeeds(title in "[a-zA-Z0-9 ]{1,30}") {
+            let (db, _dir) = setup_test_db();
+            let id = db.create_issue(&title, None, "medium").unwrap();
+            db.close_issue(id).unwrap();
+            
+            let result = archive(&db, id);
+            prop_assert!(result.is_ok());
+        }
+    }
+}

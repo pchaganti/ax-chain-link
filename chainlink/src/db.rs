@@ -1222,6 +1222,24 @@ mod tests {
     }
 
     #[test]
+    fn test_close_nonexistent_issue_returns_false() {
+        let (db, _dir) = setup_test_db();
+
+        // Closing an issue that doesn't exist should return false
+        let closed = db.close_issue(99999).unwrap();
+        assert!(!closed, "close_issue should return false for nonexistent issue");
+    }
+
+    #[test]
+    fn test_reopen_nonexistent_issue_returns_false() {
+        let (db, _dir) = setup_test_db();
+
+        // Reopening an issue that doesn't exist should return false
+        let reopened = db.reopen_issue(99999).unwrap();
+        assert!(!reopened, "reopen_issue should return false for nonexistent issue");
+    }
+
+    #[test]
     fn test_delete_issue() {
         let (db, _dir) = setup_test_db();
 
@@ -1258,13 +1276,18 @@ mod tests {
     }
 
     #[test]
-    fn test_add_duplicate_label() {
+    fn test_add_duplicate_label_returns_false() {
         let (db, _dir) = setup_test_db();
 
         let id = db.create_issue("Test issue", None, "medium").unwrap();
 
-        db.add_label(id, "bug").unwrap();
-        db.add_label(id, "bug").unwrap(); // Should be ignored
+        // First add should return true (label was added)
+        let first = db.add_label(id, "bug").unwrap();
+        assert!(first, "First add_label should return true");
+
+        // Second add should return false (duplicate, nothing inserted)
+        let second = db.add_label(id, "bug").unwrap();
+        assert!(!second, "Duplicate add_label should return false");
 
         let labels = db.get_labels(id).unwrap();
         assert_eq!(labels.len(), 1);
@@ -1285,6 +1308,18 @@ mod tests {
         let labels = db.get_labels(id).unwrap();
         assert_eq!(labels.len(), 1);
         assert_eq!(labels[0], "urgent");
+    }
+
+    #[test]
+    fn test_remove_nonexistent_label_returns_false() {
+        let (db, _dir) = setup_test_db();
+
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.add_label(id, "bug").unwrap();
+
+        // Removing a label that doesn't exist should return false
+        let removed = db.remove_label(id, "nonexistent").unwrap();
+        assert!(!removed, "remove_label should return false for nonexistent label");
     }
 
     #[test]

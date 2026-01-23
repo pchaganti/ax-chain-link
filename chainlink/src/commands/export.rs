@@ -178,3 +178,173 @@ fn write_issue_md(md: &mut String, db: &Database, issue: &Issue) -> Result<()> {
     md.push_str("\n---\n\n");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> (Database, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        (db, dir)
+    }
+
+    #[test]
+    fn test_export_issue_basic() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        let issue = db.get_issue(id).unwrap().unwrap();
+        let exported = export_issue(&db, &issue).unwrap();
+        assert_eq!(exported.id, id);
+        assert_eq!(exported.title, "Test issue");
+        assert_eq!(exported.priority, "medium");
+        assert_eq!(exported.status, "open");
+    }
+
+    #[test]
+    fn test_export_issue_with_labels() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.add_label(id, "bug").unwrap();
+        db.add_label(id, "urgent").unwrap();
+        let issue = db.get_issue(id).unwrap().unwrap();
+        let exported = export_issue(&db, &issue).unwrap();
+        assert_eq!(exported.labels.len(), 2);
+    }
+
+    #[test]
+    fn test_export_issue_with_comments() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.add_comment(id, "First comment").unwrap();
+        db.add_comment(id, "Second comment").unwrap();
+        let issue = db.get_issue(id).unwrap().unwrap();
+        let exported = export_issue(&db, &issue).unwrap();
+        assert_eq!(exported.comments.len(), 2);
+    }
+
+    #[test]
+    fn test_export_closed_issue() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        db.close_issue(id).unwrap();
+        let issue = db.get_issue(id).unwrap().unwrap();
+        let exported = export_issue(&db, &issue).unwrap();
+        assert_eq!(exported.status, "closed");
+        assert!(exported.closed_at.is_some());
+    }
+
+    #[test]
+    fn test_run_json_to_file() {
+        let (db, dir) = setup_test_db();
+        db.create_issue("Issue 1", None, "high").unwrap();
+        db.create_issue("Issue 2", Some("Description"), "low").unwrap();
+        let output_path = dir.path().join("export.json");
+        let result = run_json(&db, Some(output_path.to_str().unwrap()));
+        assert!(result.is_ok());
+        let content = fs::read_to_string(&output_path).unwrap();
+        let data: ExportData = serde_json::from_str(&content).unwrap();
+        assert_eq!(data.version, 1);
+        assert_eq!(data.issues.len(), 2);
+    }
+
+    #[test]
+    fn test_run_json_empty_database() {
+        let (db, dir) = setup_test_db();
+        let output_path = dir.path().join("export.json");
+        let result = run_json(&db, Some(output_path.to_str().unwrap()));
+        assert!(result.is_ok());
+        let content = fs::read_to_string(&output_path).unwrap();
+        let data: ExportData = serde_json::from_str(&content).unwrap();
+        assert_eq!(data.issues.len(), 0);
+    }
+
+    #[test]
+    fn test_run_markdown_to_file() {
+        let (db, dir) = setup_test_db();
+        db.create_issue("Issue 1", None, "high").unwrap();
+        let output_path = dir.path().join("export.md");
+        let result = run_markdown(&db, Some(output_path.to_str().unwrap()));
+        assert!(result.is_ok());
+        let content = fs::read_to_string(&output_path).unwrap();
+        assert!(content.contains("# Chainlink Issues Export"));
+    }
+
+    #[test]
+    fn test_markdown_groups_by_status() {
+        let (db, dir) = setup_test_db();
+        db.create_issue("Open issue", None, "medium").unwrap();
+        let closed_id = db.create_issue("Closed issue", None, "medium").unwrap();
+        db.close_issue(closed_id).unwrap();
+        let output_path = dir.path().join("export.md");
+        run_markdown(&db, Some(output_path.to_str().unwrap())).unwrap();
+        let content = fs::read_to_string(&output_path).unwrap();
+        assert!(content.contains("## Open Issues"));
+        assert!(content.contains("## Closed Issues"));
+    }
+
+    #[test]
+    fn test_export_unicode_content() {
+        let (db, dir) = setup_test_db();
+        let id = db.create_issue("Test 🐛", Some("Description αβγ"), "medium").unwrap();
+        db.add_label(id, "バグ").unwrap();
+        let output_path = dir.path().join("export.json");
+        run_json(&db, Some(output_path.to_str().unwrap())).unwrap();
+        let content = fs::read_to_string(&output_path).unwrap();
+        let data: ExportData = serde_json::from_str(&content).unwrap();
+        assert_eq!(data.issues[0].title, "Test 🐛");
+    }
+
+    #[test]
+    fn test_export_data_roundtrip() {
+        let data = ExportData {
+            version: 1,
+            exported_at: "2024-01-01T00:00:00Z".to_string(),
+            issues: vec![ExportedIssue {
+                id: 1,
+                title: "Test".to_string(),
+                description: Some("Desc".to_string()),
+                status: "open".to_string(),
+                priority: "medium".to_string(),
+                parent_id: None,
+                labels: vec!["bug".to_string()],
+                comments: vec![ExportedComment {
+                    content: "Comment".to_string(),
+                    created_at: "2024-01-01T00:00:00Z".to_string(),
+                }],
+                created_at: "2024-01-01T00:00:00Z".to_string(),
+                updated_at: "2024-01-01T00:00:00Z".to_string(),
+                closed_at: None,
+            }],
+        };
+        let json = serde_json::to_string(&data).unwrap();
+        let parsed: ExportData = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.version, data.version);
+        assert_eq!(parsed.issues.len(), 1);
+    }
+
+    proptest! {
+        #[test]
+        fn prop_export_never_panics(title in "[a-zA-Z0-9 ]{1,50}") {
+            let (db, dir) = setup_test_db();
+            db.create_issue(&title, None, "medium").unwrap();
+            let output_path = dir.path().join("export.json");
+            let result = run_json(&db, Some(output_path.to_str().unwrap()));
+            prop_assert!(result.is_ok());
+        }
+
+        #[test]
+        fn prop_json_is_valid(title in "[a-zA-Z0-9 ]{1,30}") {
+            let (db, dir) = setup_test_db();
+            db.create_issue(&title, None, "medium").unwrap();
+            let output_path = dir.path().join("export.json");
+            run_json(&db, Some(output_path.to_str().unwrap())).unwrap();
+            let content = fs::read_to_string(&output_path).unwrap();
+            let result: Result<ExportData, _> = serde_json::from_str(&content);
+            prop_assert!(result.is_ok());
+        }
+    }
+}

@@ -87,3 +87,130 @@ pub fn status(db: &Database) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> (Database, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::open(&db_path).unwrap();
+        (db, dir)
+    }
+
+    #[test]
+    fn test_start_timer() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+
+        let result = start(&db, id);
+        assert!(result.is_ok());
+
+        let active = db.get_active_timer().unwrap();
+        assert!(active.is_some());
+        assert_eq!(active.unwrap().0, id);
+    }
+
+    #[test]
+    fn test_start_nonexistent_issue() {
+        let (db, _dir) = setup_test_db();
+
+        let result = start(&db, 99999);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_start_timer_already_running() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+
+        start(&db, id).unwrap();
+        let result = start(&db, id);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("already running"));
+    }
+
+    #[test]
+    fn test_start_timer_different_issue_running() {
+        let (db, _dir) = setup_test_db();
+        let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
+        let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
+
+        start(&db, id1).unwrap();
+        let result = start(&db, id2);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Stop it first"));
+    }
+
+    #[test]
+    fn test_stop_timer() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+
+        start(&db, id).unwrap();
+        let result = stop(&db);
+        assert!(result.is_ok());
+
+        let active = db.get_active_timer().unwrap();
+        assert!(active.is_none());
+    }
+
+    #[test]
+    fn test_stop_no_timer() {
+        let (db, _dir) = setup_test_db();
+
+        let result = stop(&db);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No timer running"));
+    }
+
+    #[test]
+    fn test_status_no_timer() {
+        let (db, _dir) = setup_test_db();
+
+        let result = status(&db);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_status_with_timer() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+
+        start(&db, id).unwrap();
+        let result = status(&db);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_timer_workflow() {
+        let (db, _dir) = setup_test_db();
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+
+        start(&db, id).unwrap();
+        status(&db).unwrap();
+        stop(&db).unwrap();
+
+        let active = db.get_active_timer().unwrap();
+        assert!(active.is_none());
+    }
+
+    proptest! {
+        #[test]
+        fn prop_start_stop_roundtrip(idx in 0usize..5) {
+            let (db, _dir) = setup_test_db();
+            let ids: Vec<i64> = (0..5).map(|i| db.create_issue(&format!("Issue {}", i), None, "medium").unwrap()).collect();
+            let id = ids[idx];
+
+            start(&db, id).unwrap();
+            prop_assert!(db.get_active_timer().unwrap().is_some());
+            
+            stop(&db).unwrap();
+            prop_assert!(db.get_active_timer().unwrap().is_none());
+        }
+    }
+}
