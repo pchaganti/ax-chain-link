@@ -179,7 +179,8 @@ mod tests {
     fn test_run_prioritizes_higher() {
         let (db, _dir) = setup_test_db();
         db.create_issue("Low priority", None, "low").unwrap();
-        db.create_issue("Critical priority", None, "critical").unwrap();
+        db.create_issue("Critical priority", None, "critical")
+            .unwrap();
         db.create_issue("Medium priority", None, "medium").unwrap();
 
         let result = run(&db);
@@ -200,13 +201,16 @@ mod tests {
     fn test_calculate_progress_with_subissues() {
         let (db, _dir) = setup_test_db();
         let parent_id = db.create_issue("Parent", None, "high").unwrap();
-        let child1 = db.create_subissue(parent_id, "Child 1", None, "medium").unwrap();
-        db.create_subissue(parent_id, "Child 2", None, "medium").unwrap();
+        let child1 = db
+            .create_subissue(parent_id, "Child 1", None, "medium")
+            .unwrap();
+        db.create_subissue(parent_id, "Child 2", None, "medium")
+            .unwrap();
         db.close_issue(child1).unwrap();
 
         let issue = db.get_issue(parent_id).unwrap().unwrap();
         let progress = calculate_progress(&db, &issue).unwrap();
-        
+
         assert!(progress.is_some());
         let (closed, total) = progress.unwrap();
         assert_eq!(closed, 1);

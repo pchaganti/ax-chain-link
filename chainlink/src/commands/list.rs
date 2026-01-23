@@ -200,7 +200,9 @@ mod tests {
         db.add_label(id2, "bug").unwrap();
         db.add_label(id3, "feature").unwrap();
 
-        let issues = db.list_issues(Some("open"), Some("bug"), Some("high")).unwrap();
+        let issues = db
+            .list_issues(Some("open"), Some("bug"), Some("high"))
+            .unwrap();
         assert!(issues.iter().any(|i| i.id == id1));
         assert!(!issues.iter().any(|i| i.id == id2));
         assert!(!issues.iter().any(|i| i.id == id3));
@@ -222,7 +224,8 @@ mod tests {
     #[test]
     fn test_run_unicode_title() {
         let (db, _dir) = setup_test_db();
-        db.create_issue("日本語タイトル 🎉", None, "medium").unwrap();
+        db.create_issue("日本語タイトル 🎉", None, "medium")
+            .unwrap();
 
         let result = run(&db, None, None, None);
         assert!(result.is_ok());

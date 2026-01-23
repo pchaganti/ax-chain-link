@@ -86,7 +86,9 @@ mod tests {
     #[test]
     fn test_update_all_fields() {
         let (db, _dir) = setup_test_db();
-        let issue_id = db.create_issue("Original", Some("Old desc"), "low").unwrap();
+        let issue_id = db
+            .create_issue("Original", Some("Old desc"), "low")
+            .unwrap();
 
         let result = run(
             &db,
@@ -110,7 +112,10 @@ mod tests {
 
         let result = run(&db, issue_id, None, None, None);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Nothing to update"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Nothing to update"));
     }
 
     #[test]

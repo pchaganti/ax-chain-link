@@ -354,7 +354,11 @@ mod tests {
         // All should have content
         for (name, content) in RULE_FILES {
             assert!(!name.is_empty(), "Rule file name should not be empty");
-            assert!(!content.is_empty(), "Rule file {} should not be empty", name);
+            assert!(
+                !content.is_empty(),
+                "Rule file {} should not be empty",
+                name
+            );
         }
     }
 }

@@ -101,7 +101,8 @@ mod tests {
     fn test_run_with_hierarchy() {
         let (db, _dir) = setup_test_db();
         let parent = db.create_issue("Parent", None, "high").unwrap();
-        db.create_subissue(parent, "Child 1", None, "medium").unwrap();
+        db.create_subissue(parent, "Child 1", None, "medium")
+            .unwrap();
         db.create_subissue(parent, "Child 2", None, "low").unwrap();
         let result = run(&db, None);
         assert!(result.is_ok());
@@ -111,7 +112,9 @@ mod tests {
     fn test_run_nested_hierarchy() {
         let (db, _dir) = setup_test_db();
         let parent = db.create_issue("Grandparent", None, "high").unwrap();
-        let child = db.create_subissue(parent, "Parent", None, "medium").unwrap();
+        let child = db
+            .create_subissue(parent, "Parent", None, "medium")
+            .unwrap();
         db.create_subissue(child, "Child", None, "low").unwrap();
         let result = run(&db, None);
         assert!(result.is_ok());

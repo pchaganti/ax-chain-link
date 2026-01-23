@@ -187,14 +187,14 @@ mod tests {
             if a != b {
                 let (db, _dir) = setup_test_db();
                 let ids: Vec<i64> = (0..5).map(|i| db.create_issue(&format!("Issue {}", i), None, "medium").unwrap()).collect();
-                
+
                 let id1 = ids[a as usize % ids.len()];
                 let id2 = ids[b as usize % ids.len()];
-                
+
                 add(&db, id1, id2).unwrap();
                 let related = db.get_related_issues(id1).unwrap();
                 prop_assert!(!related.is_empty());
-                
+
                 remove(&db, id1, id2).unwrap();
                 let related = db.get_related_issues(id1).unwrap();
                 prop_assert!(related.is_empty());

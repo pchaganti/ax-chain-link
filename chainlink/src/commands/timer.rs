@@ -208,7 +208,7 @@ mod tests {
 
             start(&db, id).unwrap();
             prop_assert!(db.get_active_timer().unwrap().is_some());
-            
+
             stop(&db).unwrap();
             prop_assert!(db.get_active_timer().unwrap().is_none());
         }

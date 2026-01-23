@@ -161,7 +161,10 @@ mod tests {
         assert!(result.is_ok());
 
         let last = db.get_last_session().unwrap().unwrap();
-        assert_eq!(last.handoff_notes, Some("Completed auth feature".to_string()));
+        assert_eq!(
+            last.handoff_notes,
+            Some("Completed auth feature".to_string())
+        );
     }
 
     #[test]
@@ -170,7 +173,10 @@ mod tests {
 
         let result = end(&db, None);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No active session"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("No active session"));
     }
 
     // ==================== Status Tests ====================
@@ -228,7 +234,10 @@ mod tests {
 
         let result = work(&db, issue_id);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No active session"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("No active session"));
     }
 
     #[test]
@@ -283,7 +292,10 @@ mod tests {
         // Start new session
         start(&db).unwrap();
         let last = db.get_last_session().unwrap().unwrap();
-        assert_eq!(last.handoff_notes, Some("Made progress on feature".to_string()));
+        assert_eq!(
+            last.handoff_notes,
+            Some("Made progress on feature".to_string())
+        );
     }
 
     // ==================== Property-Based Tests ====================

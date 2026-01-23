@@ -1227,7 +1227,10 @@ mod tests {
 
         // Closing an issue that doesn't exist should return false
         let closed = db.close_issue(99999).unwrap();
-        assert!(!closed, "close_issue should return false for nonexistent issue");
+        assert!(
+            !closed,
+            "close_issue should return false for nonexistent issue"
+        );
     }
 
     #[test]
@@ -1236,7 +1239,10 @@ mod tests {
 
         // Reopening an issue that doesn't exist should return false
         let reopened = db.reopen_issue(99999).unwrap();
-        assert!(!reopened, "reopen_issue should return false for nonexistent issue");
+        assert!(
+            !reopened,
+            "reopen_issue should return false for nonexistent issue"
+        );
     }
 
     #[test]
@@ -1319,7 +1325,10 @@ mod tests {
 
         // Removing a label that doesn't exist should return false
         let removed = db.remove_label(id, "nonexistent").unwrap();
-        assert!(!removed, "remove_label should return false for nonexistent label");
+        assert!(
+            !removed,
+            "remove_label should return false for nonexistent label"
+        );
     }
 
     #[test]

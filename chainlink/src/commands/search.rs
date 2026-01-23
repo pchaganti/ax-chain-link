@@ -178,9 +178,7 @@ mod tests {
     #[test]
     fn test_search_subissue_shows_parent() {
         let (db, _dir) = setup_test_db();
-        let parent_id = db
-            .create_issue("Parent feature", None, "high")
-            .unwrap();
+        let parent_id = db.create_issue("Parent feature", None, "high").unwrap();
         db.create_subissue(parent_id, "Sub task authentication", None, "medium")
             .unwrap();
 

@@ -234,14 +234,8 @@ mod tests {
 
     #[test]
     fn test_determine_changelog_category_bug() {
-        assert_eq!(
-            determine_changelog_category(&["bug".to_string()]),
-            "Fixed"
-        );
-        assert_eq!(
-            determine_changelog_category(&["fix".to_string()]),
-            "Fixed"
-        );
+        assert_eq!(determine_changelog_category(&["bug".to_string()]), "Fixed");
+        assert_eq!(determine_changelog_category(&["fix".to_string()]), "Fixed");
         assert_eq!(
             determine_changelog_category(&["bugfix".to_string()]),
             "Fixed"
@@ -308,10 +302,7 @@ mod tests {
 
     #[test]
     fn test_determine_changelog_category_case_insensitive() {
-        assert_eq!(
-            determine_changelog_category(&["BUG".to_string()]),
-            "Fixed"
-        );
+        assert_eq!(determine_changelog_category(&["BUG".to_string()]), "Fixed");
         assert_eq!(
             determine_changelog_category(&["Feature".to_string()]),
             "Added"

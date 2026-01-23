@@ -105,7 +105,10 @@ mod tests {
 
         let result = archive(&db, id);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("only archive closed"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("only archive closed"));
     }
 
     #[test]
@@ -197,7 +200,7 @@ mod tests {
         fn prop_archive_requires_closed(title in "[a-zA-Z0-9 ]{1,30}") {
             let (db, _dir) = setup_test_db();
             let id = db.create_issue(&title, None, "medium").unwrap();
-            
+
             let result = archive(&db, id);
             prop_assert!(result.is_err());
         }
@@ -207,7 +210,7 @@ mod tests {
             let (db, _dir) = setup_test_db();
             let id = db.create_issue(&title, None, "medium").unwrap();
             db.close_issue(id).unwrap();
-            
+
             let result = archive(&db, id);
             prop_assert!(result.is_ok());
         }

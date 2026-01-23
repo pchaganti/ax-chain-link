@@ -81,8 +81,8 @@ fn import_issue(db: &Database, issue: &ExportedIssue, parent_id: Option<i64>) ->
 
 #[cfg(test)]
 mod tests {
+    use super::super::export::{ExportData, ExportedComment, ExportedIssue};
     use super::*;
-    use super::super::export::{ExportedComment, ExportedIssue, ExportData};
     use proptest::prelude::*;
     use tempfile::tempdir;
 

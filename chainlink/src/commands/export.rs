@@ -241,7 +241,8 @@ mod tests {
     fn test_run_json_to_file() {
         let (db, dir) = setup_test_db();
         db.create_issue("Issue 1", None, "high").unwrap();
-        db.create_issue("Issue 2", Some("Description"), "low").unwrap();
+        db.create_issue("Issue 2", Some("Description"), "low")
+            .unwrap();
         let output_path = dir.path().join("export.json");
         let result = run_json(&db, Some(output_path.to_str().unwrap()));
         assert!(result.is_ok());
@@ -289,7 +290,9 @@ mod tests {
     #[test]
     fn test_export_unicode_content() {
         let (db, dir) = setup_test_db();
-        let id = db.create_issue("Test 🐛", Some("Description αβγ"), "medium").unwrap();
+        let id = db
+            .create_issue("Test 🐛", Some("Description αβγ"), "medium")
+            .unwrap();
         db.add_label(id, "バグ").unwrap();
         let output_path = dir.path().join("export.json");
         run_json(&db, Some(output_path.to_str().unwrap())).unwrap();

@@ -152,7 +152,10 @@ mod tests {
 
         let result = block(&db, issue, issue);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("cannot block itself"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("cannot block itself"));
     }
 
     #[test]
