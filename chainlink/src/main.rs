@@ -341,6 +341,8 @@ enum SessionCommands {
         /// Issue ID
         id: i64,
     },
+    /// Show handoff notes from the previous session
+    LastHandoff,
 }
 
 #[derive(Subcommand)]
@@ -597,6 +599,7 @@ fn main() -> Result<()> {
                 SessionCommands::End { notes } => commands::session::end(&db, notes.as_deref()),
                 SessionCommands::Status => commands::session::status(&db),
                 SessionCommands::Work { id } => commands::session::work(&db, id),
+                SessionCommands::LastHandoff => commands::session::last_handoff(&db),
             }
         }
 
