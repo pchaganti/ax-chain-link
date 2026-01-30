@@ -55,9 +55,16 @@ def main():
 
     context_parts = ["<chainlink-session-context>"]
 
+    # Get handoff notes from previous session before starting new one
+    last_handoff = run_chainlink(["session", "last-handoff"])
+
     # Auto-start session if none active
     if not has_active_session():
         run_chainlink(["session", "start"])
+
+    # Include previous session handoff notes if available
+    if last_handoff and "No previous" not in last_handoff:
+        context_parts.append(f"## Previous Session Handoff\n{last_handoff}")
 
     # Try to get session status
     session_status = run_chainlink(["session", "status"])

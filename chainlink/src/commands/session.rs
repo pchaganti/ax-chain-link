@@ -97,6 +97,24 @@ pub fn work(db: &Database, issue_id: i64) -> Result<()> {
     Ok(())
 }
 
+pub fn last_handoff(db: &Database) -> Result<()> {
+    match db.get_last_session()? {
+        Some(session) => {
+            if let Some(notes) = &session.handoff_notes {
+                if !notes.is_empty() {
+                    println!("{}", notes);
+                    return Ok(());
+                }
+            }
+            println!("No previous handoff notes.");
+        }
+        None => {
+            println!("No previous session found.");
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,6 +284,46 @@ mod tests {
         work(&db, issue2).unwrap();
         let session = db.get_current_session().unwrap().unwrap();
         assert_eq!(session.active_issue_id, Some(issue2));
+    }
+
+    // ==================== Last Handoff Tests ====================
+
+    #[test]
+    fn test_last_handoff_no_sessions() {
+        let (db, _dir) = setup_test_db();
+
+        let result = last_handoff(&db);
+        assert!(result.is_ok());
+        // Should handle gracefully when no sessions exist
+    }
+
+    #[test]
+    fn test_last_handoff_no_notes() {
+        let (db, _dir) = setup_test_db();
+
+        start(&db).unwrap();
+        end(&db, None).unwrap();
+
+        let result = last_handoff(&db);
+        assert!(result.is_ok());
+        // Should handle gracefully when last session has no notes
+    }
+
+    #[test]
+    fn test_last_handoff_with_notes() {
+        let (db, _dir) = setup_test_db();
+
+        start(&db).unwrap();
+        end(&db, Some("Important handoff notes")).unwrap();
+
+        let result = last_handoff(&db);
+        assert!(result.is_ok());
+        // Notes should be retrievable
+        let last = db.get_last_session().unwrap().unwrap();
+        assert_eq!(
+            last.handoff_notes,
+            Some("Important handoff notes".to_string())
+        );
     }
 
     // ==================== Full Workflow Tests ====================
