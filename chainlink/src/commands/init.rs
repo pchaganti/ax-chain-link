@@ -11,6 +11,7 @@ const PROMPT_GUARD_PY: &str = include_str!("../../../.claude/hooks/prompt-guard.
 const POST_EDIT_CHECK_PY: &str = include_str!("../../../.claude/hooks/post-edit-check.py");
 const SESSION_START_PY: &str = include_str!("../../../.claude/hooks/session-start.py");
 const PRE_WEB_CHECK_PY: &str = include_str!("../../../.claude/hooks/pre-web-check.py");
+const WORK_CHECK_PY: &str = include_str!("../../../.claude/hooks/work-check.py");
 
 // Embed MCP server for safe web fetching
 const SAFE_FETCH_SERVER_PY: &str = include_str!("../../../.claude/mcp/safe-fetch-server.py");
@@ -137,6 +138,9 @@ pub fn run(path: &Path, force: bool) -> Result<()> {
         fs::write(hooks_dir.join("pre-web-check.py"), PRE_WEB_CHECK_PY)
             .context("Failed to write pre-web-check.py")?;
 
+        fs::write(hooks_dir.join("work-check.py"), WORK_CHECK_PY)
+            .context("Failed to write work-check.py")?;
+
         // Create MCP server directory and write safe-fetch server
         let mcp_dir = claude_dir.join("mcp");
         fs::create_dir_all(&mcp_dir).context("Failed to create .claude/mcp directory")?;
@@ -192,6 +196,7 @@ mod tests {
         assert!(dir.path().join(".claude/hooks/post-edit-check.py").exists());
         assert!(dir.path().join(".claude/hooks/session-start.py").exists());
         assert!(dir.path().join(".claude/hooks/pre-web-check.py").exists());
+        assert!(dir.path().join(".claude/hooks/work-check.py").exists());
         assert!(dir.path().join(".claude/mcp/safe-fetch-server.py").exists());
         assert!(dir.path().join(".mcp.json").exists());
     }
@@ -339,6 +344,7 @@ mod tests {
         assert!(!POST_EDIT_CHECK_PY.is_empty());
         assert!(!SESSION_START_PY.is_empty());
         assert!(!PRE_WEB_CHECK_PY.is_empty());
+        assert!(!WORK_CHECK_PY.is_empty());
         assert!(!SAFE_FETCH_SERVER_PY.is_empty());
         assert!(!MCP_JSON.is_empty());
         assert!(!SANITIZE_PATTERNS.is_empty());
