@@ -55,6 +55,7 @@ context-compression resilience.
 - Fix daemon log file corruption from duplicate file handles (#97)
 
 ### Changed
+- Block git mutation commands via hook (#113)
 - Fix wrong assertion directions and tautological property tests (#96)
 - Fix overly loose CLI integration test assertions (#95)
 - Fix display function tests to verify actual output or DB state (#94)

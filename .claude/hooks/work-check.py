@@ -13,6 +13,14 @@ import io
 # Fix Windows encoding issues
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
+# Git commands that are PERMANENTLY blocked — never allowed regardless of issue state
+BLOCKED_GIT_COMMANDS = [
+    "git push", "git commit", "git merge", "git rebase", "git cherry-pick",
+    "git reset", "git checkout .", "git restore .", "git clean",
+    "git stash", "git tag", "git am", "git apply",
+    "git branch -d", "git branch -D", "git branch -m",
+]
+
 # Bash commands that are always allowed (read-only / chainlink management)
 ALLOWED_BASH_PREFIXES = [
     "chainlink ",
@@ -52,6 +60,19 @@ def run_chainlink(args):
         return None
 
 
+def is_blocked_git(input_data):
+    """Check if a Bash command is a blocked git mutation. Always denied."""
+    command = input_data.get("tool_input", {}).get("command", "").strip()
+    for blocked in BLOCKED_GIT_COMMANDS:
+        if command.startswith(blocked):
+            return True
+    # Also catch piped/chained git mutations: && git push, ; git commit, etc.
+    for blocked in BLOCKED_GIT_COMMANDS:
+        if f"&& {blocked}" in command or f"; {blocked}" in command or f"| {blocked}" in command:
+            return True
+    return False
+
+
 def is_allowed_bash(input_data):
     """Check if a Bash command is on the allow list (read-only/infra)."""
     command = input_data.get("tool_input", {}).get("command", "").strip()
@@ -71,6 +92,16 @@ def main():
     # Only check on Write, Edit, Bash
     if tool_name not in ('Write', 'Edit', 'Bash'):
         sys.exit(0)
+
+    # PERMANENT BLOCK: git mutation commands are never allowed
+    if tool_name == 'Bash' and is_blocked_git(input_data):
+        print(
+            "DENIED: Git mutation commands are not allowed. "
+            "Commits, pushes, merges, rebases, and other git write operations "
+            "are performed by the human, not the AI.\n\n"
+            "Read-only git commands (status, diff, log, show, branch) are allowed."
+        )
+        sys.exit(2)
 
     # Allow read-only / infrastructure Bash commands through
     if tool_name == 'Bash' and is_allowed_bash(input_data):
