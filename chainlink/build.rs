@@ -7,8 +7,13 @@ fn main() {
     println!("cargo:rerun-if-changed=../.claude/hooks/prompt-guard.py");
     println!("cargo:rerun-if-changed=../.claude/hooks/post-edit-check.py");
     println!("cargo:rerun-if-changed=../.claude/hooks/session-start.py");
+    println!("cargo:rerun-if-changed=../.claude/hooks/pre-web-check.py");
+    println!("cargo:rerun-if-changed=../.claude/hooks/work-check.py");
+    println!("cargo:rerun-if-changed=../.claude/mcp/safe-fetch-server.py");
+    println!("cargo:rerun-if-changed=../.mcp.json");
 
-    // Track .chainlink/rules files
+    // Track .chainlink config and rules files
+    println!("cargo:rerun-if-changed=../.chainlink/hook-config.json");
     println!("cargo:rerun-if-changed=../.chainlink/rules/global.md");
     println!("cargo:rerun-if-changed=../.chainlink/rules/project.md");
     println!("cargo:rerun-if-changed=../.chainlink/rules/rust.md");
@@ -31,4 +36,9 @@ fn main() {
     println!("cargo:rerun-if-changed=../.chainlink/rules/odin.md");
     println!("cargo:rerun-if-changed=../.chainlink/rules/elixir.md");
     println!("cargo:rerun-if-changed=../.chainlink/rules/elixir-phoenix.md");
+    println!("cargo:rerun-if-changed=../.chainlink/rules/web.md");
+    println!("cargo:rerun-if-changed=../.chainlink/rules/sanitize-patterns.txt");
+    println!("cargo:rerun-if-changed=../.chainlink/rules/tracking-strict.md");
+    println!("cargo:rerun-if-changed=../.chainlink/rules/tracking-normal.md");
+    println!("cargo:rerun-if-changed=../.chainlink/rules/tracking-relaxed.md");
 }

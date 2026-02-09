@@ -20,6 +20,14 @@ const MCP_JSON: &str = include_str!("../../../.mcp.json");
 // Embed sanitization patterns
 const SANITIZE_PATTERNS: &str = include_str!("../../../.chainlink/rules/sanitize-patterns.txt");
 
+// Embed hook configuration
+const HOOK_CONFIG_JSON: &str = include_str!("../../../.chainlink/hook-config.json");
+
+// Embed tracking mode rule files
+const RULE_TRACKING_STRICT: &str = include_str!("../../../.chainlink/rules/tracking-strict.md");
+const RULE_TRACKING_NORMAL: &str = include_str!("../../../.chainlink/rules/tracking-normal.md");
+const RULE_TRACKING_RELAXED: &str = include_str!("../../../.chainlink/rules/tracking-relaxed.md");
+
 // Embed rule files at compile time
 // Path: chainlink/src/commands/init.rs -> ../../../.chainlink/rules/
 const RULE_GLOBAL: &str = include_str!("../../../.chainlink/rules/global.md");
@@ -72,6 +80,9 @@ const RULE_FILES: &[(&str, &str)] = &[
     ("elixir-phoenix.md", RULE_ELIXIR_PHOENIX),
     ("web.md", RULE_WEB),
     ("sanitize-patterns.txt", SANITIZE_PATTERNS),
+    ("tracking-strict.md", RULE_TRACKING_STRICT),
+    ("tracking-normal.md", RULE_TRACKING_NORMAL),
+    ("tracking-relaxed.md", RULE_TRACKING_RELAXED),
 ];
 
 pub fn run(path: &Path, force: bool) -> Result<()> {
@@ -98,6 +109,13 @@ pub fn run(path: &Path, force: bool) -> Result<()> {
         let db_path = chainlink_dir.join("issues.db");
         Database::open(&db_path)?;
         println!("Created {}", chainlink_dir.display());
+    }
+
+    // Write hook config (create or update)
+    let config_path = chainlink_dir.join("hook-config.json");
+    if !config_path.exists() || force {
+        fs::write(&config_path, HOOK_CONFIG_JSON)
+            .context("Failed to write hook-config.json")?;
     }
 
     // Create or update rules directory
@@ -183,6 +201,7 @@ mod tests {
         assert!(dir.path().join(".claude").exists());
         assert!(dir.path().join(".claude/hooks").exists());
         assert!(dir.path().join(".claude/mcp").exists());
+        assert!(dir.path().join(".chainlink/hook-config.json").exists());
     }
 
     #[test]
@@ -213,6 +232,9 @@ mod tests {
         assert!(rules_dir.join("python.md").exists());
         assert!(rules_dir.join("javascript.md").exists());
         assert!(rules_dir.join("typescript.md").exists());
+        assert!(rules_dir.join("tracking-strict.md").exists());
+        assert!(rules_dir.join("tracking-normal.md").exists());
+        assert!(rules_dir.join("tracking-relaxed.md").exists());
     }
 
     #[test]
@@ -348,6 +370,10 @@ mod tests {
         assert!(!SAFE_FETCH_SERVER_PY.is_empty());
         assert!(!MCP_JSON.is_empty());
         assert!(!SANITIZE_PATTERNS.is_empty());
+        assert!(!HOOK_CONFIG_JSON.is_empty());
+        assert!(!RULE_TRACKING_STRICT.is_empty());
+        assert!(!RULE_TRACKING_NORMAL.is_empty());
+        assert!(!RULE_TRACKING_RELAXED.is_empty());
         assert!(!RULE_GLOBAL.is_empty());
         assert!(!RULE_RUST.is_empty());
     }
