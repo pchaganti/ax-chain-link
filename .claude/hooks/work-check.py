@@ -13,16 +13,15 @@ import io
 # Fix Windows encoding issues
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# Git commands that are PERMANENTLY blocked — never allowed regardless of issue state
-BLOCKED_GIT_COMMANDS = [
+# Defaults — overridden by .chainlink/hook-config.json if present
+DEFAULT_BLOCKED_GIT = [
     "git push", "git commit", "git merge", "git rebase", "git cherry-pick",
     "git reset", "git checkout .", "git restore .", "git clean",
     "git stash", "git tag", "git am", "git apply",
     "git branch -d", "git branch -D", "git branch -m",
 ]
 
-# Bash commands that are always allowed (read-only / chainlink management)
-ALLOWED_BASH_PREFIXES = [
+DEFAULT_ALLOWED_BASH = [
     "chainlink ",
     "git status", "git diff", "git log", "git branch", "git show",
     "cargo test", "cargo build", "cargo check", "cargo clippy", "cargo fmt",
@@ -30,6 +29,32 @@ ALLOWED_BASH_PREFIXES = [
     "tsc", "node ", "python ",
     "ls", "dir", "pwd", "echo",
 ]
+
+
+def load_config(chainlink_dir):
+    """Load hook config from .chainlink/hook-config.json, falling back to defaults."""
+    blocked = list(DEFAULT_BLOCKED_GIT)
+    allowed = list(DEFAULT_ALLOWED_BASH)
+
+    if not chainlink_dir:
+        return blocked, allowed
+
+    config_path = os.path.join(chainlink_dir, "hook-config.json")
+    if not os.path.isfile(config_path):
+        return blocked, allowed
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+
+        if "blocked_git_commands" in config:
+            blocked = config["blocked_git_commands"]
+        if "allowed_bash_prefixes" in config:
+            allowed = config["allowed_bash_prefixes"]
+    except (json.JSONDecodeError, OSError):
+        pass
+
+    return blocked, allowed
 
 
 def find_chainlink_dir():
@@ -60,23 +85,23 @@ def run_chainlink(args):
         return None
 
 
-def is_blocked_git(input_data):
+def is_blocked_git(input_data, blocked_list):
     """Check if a Bash command is a blocked git mutation. Always denied."""
     command = input_data.get("tool_input", {}).get("command", "").strip()
-    for blocked in BLOCKED_GIT_COMMANDS:
+    for blocked in blocked_list:
         if command.startswith(blocked):
             return True
     # Also catch piped/chained git mutations: && git push, ; git commit, etc.
-    for blocked in BLOCKED_GIT_COMMANDS:
+    for blocked in blocked_list:
         if f"&& {blocked}" in command or f"; {blocked}" in command or f"| {blocked}" in command:
             return True
     return False
 
 
-def is_allowed_bash(input_data):
+def is_allowed_bash(input_data, allowed_list):
     """Check if a Bash command is on the allow list (read-only/infra)."""
     command = input_data.get("tool_input", {}).get("command", "").strip()
-    for prefix in ALLOWED_BASH_PREFIXES:
+    for prefix in allowed_list:
         if command.startswith(prefix):
             return True
     return False
@@ -93,8 +118,11 @@ def main():
     if tool_name not in ('Write', 'Edit', 'Bash'):
         sys.exit(0)
 
+    chainlink_dir = find_chainlink_dir()
+    blocked_git, allowed_bash = load_config(chainlink_dir)
+
     # PERMANENT BLOCK: git mutation commands are never allowed
-    if tool_name == 'Bash' and is_blocked_git(input_data):
+    if tool_name == 'Bash' and is_blocked_git(input_data, blocked_git):
         print(
             "DENIED: Git mutation commands are not allowed. "
             "Commits, pushes, merges, rebases, and other git write operations "
@@ -104,10 +132,8 @@ def main():
         sys.exit(2)
 
     # Allow read-only / infrastructure Bash commands through
-    if tool_name == 'Bash' and is_allowed_bash(input_data):
+    if tool_name == 'Bash' and is_allowed_bash(input_data, allowed_bash):
         sys.exit(0)
-
-    chainlink_dir = find_chainlink_dir()
     if not chainlink_dir:
         sys.exit(0)
 

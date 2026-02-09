@@ -37,6 +37,7 @@ context-compression resilience.
 - Database schema v7→v8 migration (adds `last_action` column to sessions, auto-applied on first use)
 
 ### Added
+- Make blocked git commands user-configurable in work-check hook (#116)
 - Update all dependencies to latest versions (#114)
 - Add comprehensive edge case testing (proptest, CLI fuzzing, Unicode E2E) (#50)
 - Improve session management with auto-start and stronger rules (#48)
