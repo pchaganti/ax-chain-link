@@ -117,6 +117,21 @@ def is_allowed_bash(input_data, allowed_list):
     return False
 
 
+def is_claude_memory_path(input_data):
+    """Check if a Write/Edit targets Claude Code's own memory/config directory (~/.claude/)."""
+    file_path = input_data.get("tool_input", {}).get("file_path", "")
+    if not file_path:
+        return False
+    home = os.path.expanduser("~")
+    claude_dir = os.path.join(home, ".claude")
+    try:
+        return os.path.normcase(os.path.abspath(file_path)).startswith(
+            os.path.normcase(os.path.abspath(claude_dir))
+        )
+    except (ValueError, OSError):
+        return False
+
+
 def main():
     try:
         input_data = json.load(sys.stdin)
@@ -126,6 +141,10 @@ def main():
 
     # Only check on Write, Edit, Bash
     if tool_name not in ('Write', 'Edit', 'Bash'):
+        sys.exit(0)
+
+    # Allow Claude Code to manage its own memory/config in ~/.claude/
+    if tool_name in ('Write', 'Edit') and is_claude_memory_path(input_data):
         sys.exit(0)
 
     chainlink_dir = find_chainlink_dir()

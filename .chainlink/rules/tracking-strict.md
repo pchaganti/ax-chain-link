@@ -73,6 +73,27 @@ chainlink close-all --no-changelog
 chainlink -q create "Fix bug" -p high  # Outputs just the ID number
 ```
 
+### Memory-Driven Planning (CRITICAL)
+
+Your auto-memory directory (`~/.claude/projects/.../memory/`) contains plans, architecture notes, and context from prior sessions. **You MUST consult memory before creating issues.**
+
+1. **Read memory first**: At session start, read `MEMORY.md` and any linked topic files. These contain the current plan of record.
+2. **Translate plans to issues**: Break memory plans into small, concrete chainlink issues/epics/subissues. Each subissue should be completable in a single focused session.
+3. **Verbose comments are mandatory**: When creating issues from a memory plan, add comments that quote or reference the specific plan section, rationale, and acceptance criteria so any new agent instance can pick up the work without re-reading memory.
+4. **Stay on track**: Before starting new work, check if it aligns with the plan in memory. If the user's request diverges from the plan, update memory AND issues together — never let them drift apart.
+5. **Close the loop**: When closing an issue, update memory to reflect what was completed and what changed from the original plan.
+
+```bash
+# Example: translating a memory plan into tracked work
+chainlink create "Implement webhook retry system" -p high --label feature
+chainlink comment 1 "Per memory/architecture.md: retry with exponential backoff, max 5 attempts, dead-letter queue after exhaustion. See 'Webhook Reliability' section."
+chainlink subissue 1 "Add retry queue with exponential backoff (max 5 attempts)"
+chainlink comment 2 "Backoff schedule: 1s, 5s, 25s, 125s, 625s. Store attempt count in webhook_deliveries table."
+chainlink subissue 1 "Add dead-letter queue for exhausted retries"
+chainlink comment 3 "Failed webhooks go to dead_letter_webhooks table with full payload + error history for manual inspection."
+chainlink subissue 1 "Add webhook delivery dashboard endpoint"
+```
+
 ### When to Create Issues
 | Scenario | Action |
 |----------|--------|
@@ -81,6 +102,7 @@ chainlink -q create "Fix bug" -p high  # Outputs just the ID number
 | Task has multiple steps | Create subissues for each step |
 | Work will span sessions | Create issue with detailed comments |
 | You discover related work | Create linked issue |
+| Memory contains a plan | Translate plan into epic + subissues with verbose comments |
 
 ### Session Management (MANDATORY)
 
