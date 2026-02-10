@@ -114,8 +114,7 @@ pub fn run(path: &Path, force: bool) -> Result<()> {
     // Write hook config (create or update)
     let config_path = chainlink_dir.join("hook-config.json");
     if !config_path.exists() || force {
-        fs::write(&config_path, HOOK_CONFIG_JSON)
-            .context("Failed to write hook-config.json")?;
+        fs::write(&config_path, HOOK_CONFIG_JSON).context("Failed to write hook-config.json")?;
     }
 
     // Create or update rules directory
