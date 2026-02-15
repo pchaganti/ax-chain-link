@@ -85,6 +85,67 @@ const RULE_FILES: &[(&str, &str)] = &[
     ("tracking-relaxed.md", RULE_TRACKING_RELAXED),
 ];
 
+/// Merge chainlink's MCP server entries into an existing `.mcp.json`, or create it fresh.
+/// Returns a list of warnings (e.g. overwritten keys) for the caller to display.
+fn write_mcp_json_merged(mcp_path: &Path) -> Result<Vec<String>> {
+    let embedded: serde_json::Value = serde_json::from_str(MCP_JSON)
+        .context("embedded MCP_JSON is not valid JSON — this is a build defect")?;
+    let src_servers = embedded
+        .get("mcpServers")
+        .and_then(|v| v.as_object())
+        .context("embedded MCP_JSON missing mcpServers object — this is a build defect")?;
+
+    let mut obj = match fs::read_to_string(mcp_path) {
+        Ok(raw) => {
+            let parsed: serde_json::Value = serde_json::from_str(&raw).with_context(|| {
+                format!(
+                    "Existing .mcp.json at {} contains invalid JSON — \
+                     refusing to overwrite. Fix or remove it, then retry.",
+                    mcp_path.display()
+                )
+            })?;
+            match parsed {
+                serde_json::Value::Object(map) => map,
+                _ => anyhow::bail!(
+                    "Existing .mcp.json at {} is not a JSON object — \
+                     refusing to overwrite. Fix or remove it, then retry.",
+                    mcp_path.display()
+                ),
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::Map::new(),
+        Err(e) => return Err(anyhow::Error::from(e).context("Failed to read existing .mcp.json")),
+    };
+
+    let mut dest_map = match obj.remove("mcpServers") {
+        Some(serde_json::Value::Object(map)) => map,
+        Some(_) => anyhow::bail!(
+            "Existing .mcp.json has a non-object mcpServers value — \
+             refusing to overwrite. Fix or remove it, then retry."
+        ),
+        None => serde_json::Map::new(),
+    };
+
+    let mut warnings = Vec::new();
+    for (key, value) in src_servers {
+        if dest_map.contains_key(key) {
+            warnings.push(format!(
+                "Warning: overwriting existing mcpServers entry \"{}\" with chainlink default",
+                key
+            ));
+        }
+        dest_map.insert(key.clone(), value.clone());
+    }
+
+    obj.insert("mcpServers".into(), serde_json::Value::Object(dest_map));
+
+    let mut output = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
+        .context("Failed to serialize .mcp.json")?;
+    output.push('\n');
+    fs::write(mcp_path, output).context("Failed to write .mcp.json")?;
+    Ok(warnings)
+}
+
 pub fn run(path: &Path, force: bool) -> Result<()> {
     let chainlink_dir = path.join(".chainlink");
     let claude_dir = path.join(".claude");
@@ -164,8 +225,12 @@ pub fn run(path: &Path, force: bool) -> Result<()> {
         fs::write(mcp_dir.join("safe-fetch-server.py"), SAFE_FETCH_SERVER_PY)
             .context("Failed to write safe-fetch-server.py")?;
 
-        // Write .mcp.json to project root
-        fs::write(path.join(".mcp.json"), MCP_JSON).context("Failed to write .mcp.json")?;
+        // Merge chainlink's MCP server entry into .mcp.json (preserving existing MCPs)
+        let warnings =
+            write_mcp_json_merged(&path.join(".mcp.json")).context("Failed to write .mcp.json")?;
+        for warning in warnings {
+            println!("{}", warning);
+        }
 
         if force && claude_exists {
             println!("Updated {} with latest hooks", claude_dir.display());
@@ -266,6 +331,222 @@ mod tests {
         let content = fs::read_to_string(&hook_path).unwrap();
         assert_ne!(content, "# modified");
         assert!(content.contains("python") || content.contains("def") || content.len() > 20);
+    }
+
+    /// Keys that the embedded MCP_JSON is expected to manage.
+    fn embedded_mcp_keys() -> Vec<String> {
+        let embedded: serde_json::Value = serde_json::from_str(MCP_JSON).unwrap();
+        embedded["mcpServers"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect()
+    }
+
+    #[test]
+    fn test_force_init_preserves_existing_mcp_servers() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        // Add a custom MCP server entry alongside the embedded ones
+        let mcp_path = dir.path().join(".mcp.json");
+        let mut content: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&mcp_path).unwrap()).unwrap();
+        content["mcpServers"]["my-custom-server"] = serde_json::json!({
+            "command": "node",
+            "args": ["my-server.js"]
+        });
+        fs::write(&mcp_path, serde_json::to_string_pretty(&content).unwrap()).unwrap();
+
+        // Force update
+        run(dir.path(), true).unwrap();
+
+        // Verify all embedded keys and the custom key are present
+        let result: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&mcp_path).unwrap()).unwrap();
+        let servers = result["mcpServers"].as_object().unwrap();
+
+        for key in embedded_mcp_keys() {
+            assert!(
+                servers.contains_key(&key),
+                "embedded key \"{}\" should exist",
+                key
+            );
+        }
+        assert!(
+            servers.contains_key("my-custom-server"),
+            "custom server should be preserved"
+        );
+        assert_eq!(
+            servers["my-custom-server"]["command"].as_str().unwrap(),
+            "node"
+        );
+    }
+
+    #[test]
+    fn test_force_init_returns_warnings_for_overwritten_keys() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        // The first init created .mcp.json with the embedded keys.
+        // A second force init should warn about overwriting each one.
+        let mcp_path = dir.path().join(".mcp.json");
+        let warnings = write_mcp_json_merged(&mcp_path).unwrap();
+
+        let expected_keys = embedded_mcp_keys();
+        assert_eq!(
+            warnings.len(),
+            expected_keys.len(),
+            "should warn once per embedded key"
+        );
+        for key in &expected_keys {
+            assert!(
+                warnings.iter().any(|w| w.contains(key)),
+                "should warn about overwriting \"{}\"",
+                key
+            );
+        }
+    }
+
+    #[test]
+    fn test_write_mcp_json_merged_creates_fresh_file() {
+        let dir = tempdir().unwrap();
+        let mcp_path = dir.path().join(".mcp.json");
+
+        // No pre-existing file
+        assert!(!mcp_path.exists());
+
+        let warnings = write_mcp_json_merged(&mcp_path).unwrap();
+        assert!(
+            warnings.is_empty(),
+            "fresh creation should produce no warnings"
+        );
+
+        let content: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&mcp_path).unwrap()).unwrap();
+        let servers = content["mcpServers"].as_object().unwrap();
+
+        // Should contain exactly the embedded keys
+        let expected_keys = embedded_mcp_keys();
+        assert_eq!(servers.len(), expected_keys.len());
+        for key in &expected_keys {
+            assert!(
+                servers.contains_key(key),
+                "fresh file should contain \"{}\"",
+                key
+            );
+        }
+    }
+
+    #[test]
+    fn test_force_init_fails_on_malformed_mcp_json() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        // Write invalid JSON to .mcp.json
+        let mcp_path = dir.path().join(".mcp.json");
+        fs::write(&mcp_path, "not json {{{").unwrap();
+
+        // Force init should fail, not silently overwrite
+        let result = run(dir.path(), true);
+        assert!(result.is_err());
+        let err = format!("{:#}", result.unwrap_err());
+        assert!(
+            err.contains("invalid JSON"),
+            "Error should mention invalid JSON, got: {}",
+            err
+        );
+
+        // Original (broken) content should be untouched
+        let content = fs::read_to_string(&mcp_path).unwrap();
+        assert_eq!(content, "not json {{{");
+    }
+
+    #[test]
+    fn test_force_init_fails_on_non_object_mcp_json() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        // Write a JSON array to .mcp.json
+        let mcp_path = dir.path().join(".mcp.json");
+        fs::write(&mcp_path, "[1, 2, 3]").unwrap();
+
+        // Force init should fail, not silently overwrite
+        let result = run(dir.path(), true);
+        assert!(result.is_err());
+        let err = format!("{:#}", result.unwrap_err());
+        assert!(
+            err.contains("not a JSON object"),
+            "Error should mention not a JSON object, got: {}",
+            err
+        );
+
+        // Original content should be untouched
+        let content = fs::read_to_string(&mcp_path).unwrap();
+        assert_eq!(content, "[1, 2, 3]");
+    }
+
+    #[test]
+    fn test_force_init_handles_empty_mcp_json_file() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        // Write empty file
+        let mcp_path = dir.path().join(".mcp.json");
+        fs::write(&mcp_path, "").unwrap();
+
+        // Should fail — empty file is not valid JSON
+        let result = run(dir.path(), true);
+        assert!(result.is_err());
+        let err = format!("{:#}", result.unwrap_err());
+        assert!(
+            err.contains("invalid JSON"),
+            "Error should mention invalid JSON, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_force_init_fails_on_non_object_mcp_servers_value() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        // Write valid JSON where mcpServers is a string instead of object
+        let mcp_path = dir.path().join(".mcp.json");
+        fs::write(&mcp_path, r#"{"mcpServers": "banana"}"#).unwrap();
+
+        // Should fail, not silently replace
+        let result = run(dir.path(), true);
+        assert!(result.is_err());
+        let err = format!("{:#}", result.unwrap_err());
+        assert!(
+            err.contains("non-object mcpServers"),
+            "Error should mention non-object mcpServers, got: {}",
+            err
+        );
+
+        // Original content should be untouched
+        let content = fs::read_to_string(&mcp_path).unwrap();
+        assert_eq!(content, r#"{"mcpServers": "banana"}"#);
+    }
+
+    #[test]
+    fn test_init_merges_into_mcp_json_without_mcp_servers_key() {
+        let dir = tempdir().unwrap();
+        run(dir.path(), false).unwrap();
+
+        // Write a valid object with no mcpServers key
+        let mcp_path = dir.path().join(".mcp.json");
+        fs::write(&mcp_path, r#"{"someOtherKey": true}"#).unwrap();
+
+        // Force init should add mcpServers, preserving the other key
+        run(dir.path(), true).unwrap();
+
+        let content = fs::read_to_string(&mcp_path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed["someOtherKey"], true);
+        assert!(parsed["mcpServers"]["chainlink-safe-fetch"].is_object());
     }
 
     #[test]
