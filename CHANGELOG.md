@@ -52,6 +52,7 @@ context-compression resilience.
 - `chainlink export` now outputs to stdout by default, use `-o` for file output
 
 ### Fixed
+- Fix CI test failure on latest commit (#122)
 - Fix vscode engine version to match @types/vscode (#115)
 - Fix SQL injection vulnerability in milestone listing (#97)
 - Fix cargo-mutants artifact left in production code (#97)
