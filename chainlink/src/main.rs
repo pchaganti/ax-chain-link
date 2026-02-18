@@ -305,6 +305,12 @@ enum Commands {
         #[command(subcommand)]
         action: DaemonCommands,
     },
+
+    /// Code clone detection via cpitd
+    Cpitd {
+        #[command(subcommand)]
+        action: CpitdCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -399,6 +405,28 @@ enum SessionCommands {
         /// Description of what you just did or are doing
         text: String,
     },
+}
+
+#[derive(Subcommand)]
+enum CpitdCommands {
+    /// Scan for code clones and create issues
+    Scan {
+        /// Paths to scan (defaults to current directory)
+        paths: Vec<String>,
+        /// Minimum token sequence length to report
+        #[arg(long, default_value = "50")]
+        min_tokens: u32,
+        /// Glob patterns to exclude (repeatable)
+        #[arg(long)]
+        ignore: Vec<String>,
+        /// Show what would be created without creating issues
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Show open clone issues
+    Status,
+    /// Close all open clone issues
+    Clear,
 }
 
 #[derive(Subcommand)]
@@ -752,5 +780,19 @@ fn main() -> Result<()> {
             }
             DaemonCommands::Run { dir } => daemon::run_daemon(&dir),
         },
+
+        Commands::Cpitd { action } => {
+            let db = get_db()?;
+            match action {
+                CpitdCommands::Scan {
+                    paths,
+                    min_tokens,
+                    ignore,
+                    dry_run,
+                } => commands::cpitd::scan(&db, &paths, min_tokens, &ignore, dry_run, cli.quiet),
+                CpitdCommands::Status => commands::cpitd::status(&db),
+                CpitdCommands::Clear => commands::cpitd::clear(&db),
+            }
+        }
     }
 }

@@ -1,5 +1,8 @@
 # Chainlink
 
+[![Crates.io](https://img.shields.io/crates/v/chainlink-tracker?style=flat-square)](https://crates.io/crates/chainlink-tracker)
+[![Downloads](https://img.shields.io/crates/d/chainlink-tracker?style=flat-square)](https://crates.io/crates/chainlink-tracker)
+[![License: MIT](https://img.shields.io/crates/l/chainlink-tracker?style=flat-square)](LICENSE)
 ![AI Generated](https://img.shields.io/badge/Code-AI_Generated-blue?style=flat-square&logo=probot&logoColor=white)
 
 A simple, lean issue tracker CLI designed for AI-assisted development. Track tasks across sessions with context preservation.
@@ -34,7 +37,17 @@ A simple, lean issue tracker CLI designed for AI-assisted development. Track tas
 ## Installation
 
 ```bash
-# Build from source
+# Install from crates.io
+cargo install chainlink-tracker
+```
+
+The binary is named `chainlink` and will be available in your PATH after install.
+
+### Build from Source
+
+```bash
+git clone https://github.com/dollspace-gay/chainlink.git
+cd chainlink/chainlink
 cargo build --release
 
 # The binary will be at target/release/chainlink

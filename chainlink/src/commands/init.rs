@@ -4,55 +4,53 @@ use std::path::Path;
 
 use crate::db::Database;
 
-// Embed hook files at compile time
-// Path: chainlink/src/commands/init.rs -> ../../../.claude/
-const SETTINGS_JSON: &str = include_str!("../../../.claude/settings.json");
-const PROMPT_GUARD_PY: &str = include_str!("../../../.claude/hooks/prompt-guard.py");
-const POST_EDIT_CHECK_PY: &str = include_str!("../../../.claude/hooks/post-edit-check.py");
-const SESSION_START_PY: &str = include_str!("../../../.claude/hooks/session-start.py");
-const PRE_WEB_CHECK_PY: &str = include_str!("../../../.claude/hooks/pre-web-check.py");
-const WORK_CHECK_PY: &str = include_str!("../../../.claude/hooks/work-check.py");
+// Embed hook files at compile time from resources/ (packaged with the crate)
+const SETTINGS_JSON: &str = include_str!("../../resources/claude/settings.json");
+const PROMPT_GUARD_PY: &str = include_str!("../../resources/claude/hooks/prompt-guard.py");
+const POST_EDIT_CHECK_PY: &str = include_str!("../../resources/claude/hooks/post-edit-check.py");
+const SESSION_START_PY: &str = include_str!("../../resources/claude/hooks/session-start.py");
+const PRE_WEB_CHECK_PY: &str = include_str!("../../resources/claude/hooks/pre-web-check.py");
+const WORK_CHECK_PY: &str = include_str!("../../resources/claude/hooks/work-check.py");
 
 // Embed MCP server for safe web fetching
-const SAFE_FETCH_SERVER_PY: &str = include_str!("../../../.claude/mcp/safe-fetch-server.py");
-const MCP_JSON: &str = include_str!("../../../.mcp.json");
+const SAFE_FETCH_SERVER_PY: &str = include_str!("../../resources/claude/mcp/safe-fetch-server.py");
+const MCP_JSON: &str = include_str!("../../resources/mcp.json");
 
 // Embed sanitization patterns
-const SANITIZE_PATTERNS: &str = include_str!("../../../.chainlink/rules/sanitize-patterns.txt");
+const SANITIZE_PATTERNS: &str = include_str!("../../resources/chainlink/rules/sanitize-patterns.txt");
 
 // Embed hook configuration
-const HOOK_CONFIG_JSON: &str = include_str!("../../../.chainlink/hook-config.json");
+const HOOK_CONFIG_JSON: &str = include_str!("../../resources/chainlink/hook-config.json");
 
 // Embed tracking mode rule files
-const RULE_TRACKING_STRICT: &str = include_str!("../../../.chainlink/rules/tracking-strict.md");
-const RULE_TRACKING_NORMAL: &str = include_str!("../../../.chainlink/rules/tracking-normal.md");
-const RULE_TRACKING_RELAXED: &str = include_str!("../../../.chainlink/rules/tracking-relaxed.md");
+const RULE_TRACKING_STRICT: &str = include_str!("../../resources/chainlink/rules/tracking-strict.md");
+const RULE_TRACKING_NORMAL: &str = include_str!("../../resources/chainlink/rules/tracking-normal.md");
+const RULE_TRACKING_RELAXED: &str = include_str!("../../resources/chainlink/rules/tracking-relaxed.md");
 
-// Embed rule files at compile time
-// Path: chainlink/src/commands/init.rs -> ../../../.chainlink/rules/
-const RULE_GLOBAL: &str = include_str!("../../../.chainlink/rules/global.md");
-const RULE_PROJECT: &str = include_str!("../../../.chainlink/rules/project.md");
-const RULE_RUST: &str = include_str!("../../../.chainlink/rules/rust.md");
-const RULE_PYTHON: &str = include_str!("../../../.chainlink/rules/python.md");
-const RULE_JAVASCRIPT: &str = include_str!("../../../.chainlink/rules/javascript.md");
-const RULE_TYPESCRIPT: &str = include_str!("../../../.chainlink/rules/typescript.md");
-const RULE_TYPESCRIPT_REACT: &str = include_str!("../../../.chainlink/rules/typescript-react.md");
-const RULE_JAVASCRIPT_REACT: &str = include_str!("../../../.chainlink/rules/javascript-react.md");
-const RULE_GO: &str = include_str!("../../../.chainlink/rules/go.md");
-const RULE_JAVA: &str = include_str!("../../../.chainlink/rules/java.md");
-const RULE_C: &str = include_str!("../../../.chainlink/rules/c.md");
-const RULE_CPP: &str = include_str!("../../../.chainlink/rules/cpp.md");
-const RULE_CSHARP: &str = include_str!("../../../.chainlink/rules/csharp.md");
-const RULE_RUBY: &str = include_str!("../../../.chainlink/rules/ruby.md");
-const RULE_PHP: &str = include_str!("../../../.chainlink/rules/php.md");
-const RULE_SWIFT: &str = include_str!("../../../.chainlink/rules/swift.md");
-const RULE_KOTLIN: &str = include_str!("../../../.chainlink/rules/kotlin.md");
-const RULE_SCALA: &str = include_str!("../../../.chainlink/rules/scala.md");
-const RULE_ZIG: &str = include_str!("../../../.chainlink/rules/zig.md");
-const RULE_ODIN: &str = include_str!("../../../.chainlink/rules/odin.md");
-const RULE_ELIXIR: &str = include_str!("../../../.chainlink/rules/elixir.md");
-const RULE_ELIXIR_PHOENIX: &str = include_str!("../../../.chainlink/rules/elixir-phoenix.md");
-const RULE_WEB: &str = include_str!("../../../.chainlink/rules/web.md");
+// Embed rule files at compile time from resources/chainlink/rules/
+const RULE_GLOBAL: &str = include_str!("../../resources/chainlink/rules/global.md");
+const RULE_PROJECT: &str = include_str!("../../resources/chainlink/rules/project.md");
+const RULE_RUST: &str = include_str!("../../resources/chainlink/rules/rust.md");
+const RULE_PYTHON: &str = include_str!("../../resources/chainlink/rules/python.md");
+const RULE_JAVASCRIPT: &str = include_str!("../../resources/chainlink/rules/javascript.md");
+const RULE_TYPESCRIPT: &str = include_str!("../../resources/chainlink/rules/typescript.md");
+const RULE_TYPESCRIPT_REACT: &str = include_str!("../../resources/chainlink/rules/typescript-react.md");
+const RULE_JAVASCRIPT_REACT: &str = include_str!("../../resources/chainlink/rules/javascript-react.md");
+const RULE_GO: &str = include_str!("../../resources/chainlink/rules/go.md");
+const RULE_JAVA: &str = include_str!("../../resources/chainlink/rules/java.md");
+const RULE_C: &str = include_str!("../../resources/chainlink/rules/c.md");
+const RULE_CPP: &str = include_str!("../../resources/chainlink/rules/cpp.md");
+const RULE_CSHARP: &str = include_str!("../../resources/chainlink/rules/csharp.md");
+const RULE_RUBY: &str = include_str!("../../resources/chainlink/rules/ruby.md");
+const RULE_PHP: &str = include_str!("../../resources/chainlink/rules/php.md");
+const RULE_SWIFT: &str = include_str!("../../resources/chainlink/rules/swift.md");
+const RULE_KOTLIN: &str = include_str!("../../resources/chainlink/rules/kotlin.md");
+const RULE_SCALA: &str = include_str!("../../resources/chainlink/rules/scala.md");
+const RULE_ZIG: &str = include_str!("../../resources/chainlink/rules/zig.md");
+const RULE_ODIN: &str = include_str!("../../resources/chainlink/rules/odin.md");
+const RULE_ELIXIR: &str = include_str!("../../resources/chainlink/rules/elixir.md");
+const RULE_ELIXIR_PHOENIX: &str = include_str!("../../resources/chainlink/rules/elixir-phoenix.md");
+const RULE_WEB: &str = include_str!("../../resources/chainlink/rules/web.md");
 
 /// All rule files to deploy
 const RULE_FILES: &[(&str, &str)] = &[

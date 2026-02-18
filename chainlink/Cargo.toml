@@ -1,8 +1,20 @@
 [package]
-name = "chainlink"
+name = "chainlink-tracker"
 version = "0.1.0"
 edition = "2021"
-description = "A simple, lean issue tracker CLI"
+description = "A lean issue tracker CLI for AI-assisted development sessions"
+license = "MIT"
+repository = "https://github.com/dollspace-gay/chainlink"
+homepage = "https://github.com/dollspace-gay/chainlink"
+readme = "../README.md"
+keywords = ["issue-tracker", "cli", "ai-development", "session-management", "developer-tools"]
+categories = ["command-line-utilities", "development-tools"]
+include = [
+    "src/**/*",
+    "resources/**/*",
+    "build.rs",
+    "LICENSE",
+]
 
 [lib]
 name = "chainlink"

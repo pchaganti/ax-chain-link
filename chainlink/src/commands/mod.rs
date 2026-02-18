@@ -1,5 +1,6 @@
 pub mod archive;
 pub mod comment;
+pub mod cpitd;
 pub mod create;
 pub mod delete;
 pub mod deps;
