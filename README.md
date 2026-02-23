@@ -107,7 +107,9 @@ chainlink session end --notes "Fixed auth bug, dark mode is next"
 | `chainlink update <id> -d "desc"` | Update description |
 | `chainlink update <id> -p critical` | Update priority |
 | `chainlink close <id>` | Close an issue |
+| `chainlink close <id> --no-changelog` | Close without adding a changelog entry (e.g. internal scaffolding subissues) |
 | `chainlink close-all` | Close all open issues |
+| `chainlink close-all --no-changelog` | Close all without changelog entries (e.g. internal scaffolding subissues) |
 | `chainlink close-all -l bug` | Close all issues with a specific label |
 | `chainlink close-all -p low` | Close all issues with a specific priority |
 | `chainlink reopen <id>` | Reopen a closed issue |
