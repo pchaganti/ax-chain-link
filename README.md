@@ -48,8 +48,14 @@ The binary is named `chainlink` and will be available in your PATH after install
 ```bash
 git clone https://github.com/dollspace-gay/chainlink.git
 cd chainlink/chainlink
-cargo build --release
+cargo install --path .
+# The binary will be at ~/.cargo/bin
+```
 
+```bash
+# Or build without installing
+
+cargo build --release
 # The binary will be at target/release/chainlink
 ```
 
