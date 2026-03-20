@@ -4,25 +4,25 @@ use rusqlite::params;
 
 use super::{parse_datetime, Database};
 use crate::models::TokenUsage;
-use crate::token_usage::UsageSummaryRow;
+use crate::token_usage::{ParsedUsage, UsageSummaryRow};
 
 impl Database {
-    pub fn create_token_usage(
-        &self,
-        agent_id: &str,
-        session_id: Option<i64>,
-        input_tokens: i64,
-        output_tokens: i64,
-        cache_read_tokens: Option<i64>,
-        cache_creation_tokens: Option<i64>,
-        model: &str,
-        cost_estimate: Option<f64>,
-    ) -> Result<i64> {
+    pub fn create_token_usage(&self, usage: &ParsedUsage) -> Result<i64> {
         let now = Utc::now().to_rfc3339();
         self.conn.execute(
             "INSERT INTO token_usage (agent_id, session_id, timestamp, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, model, cost_estimate)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![agent_id, session_id, now, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, model, cost_estimate],
+            params![
+                usage.agent_id,
+                usage.session_id,
+                now,
+                usage.input_tokens,
+                usage.output_tokens,
+                usage.cache_read_tokens,
+                usage.cache_creation_tokens,
+                usage.model,
+                usage.cost_estimate
+            ],
         )?;
         Ok(self.conn.last_insert_rowid())
     }
@@ -103,7 +103,8 @@ impl Database {
             where_clause, limit_clause
         );
 
-        let params_ref: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+        let params_ref: Vec<&dyn rusqlite::types::ToSql> =
+            param_values.iter().map(|p| p.as_ref()).collect();
         let mut stmt = self.conn.prepare(&sql)?;
         let results = stmt
             .query_map(params_ref.as_slice(), |row| {
@@ -165,7 +166,8 @@ impl Database {
             where_clause
         );
 
-        let params_ref: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+        let params_ref: Vec<&dyn rusqlite::types::ToSql> =
+            param_values.iter().map(|p| p.as_ref()).collect();
         let mut stmt = self.conn.prepare(&sql)?;
         let results = stmt
             .query_map(params_ref.as_slice(), |row| {

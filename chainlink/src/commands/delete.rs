@@ -12,7 +12,11 @@ pub fn run(db: &Database, id: i64, force: bool) -> Result<()> {
     };
 
     if !force {
-        print!("Delete issue {} \"{}\"? [y/N] ", format_issue_id(id), issue.title);
+        print!(
+            "Delete issue {} \"{}\"? [y/N] ",
+            format_issue_id(id),
+            issue.title
+        );
         io::stdout().flush()?;
 
         let mut input = String::new();

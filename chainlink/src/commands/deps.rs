@@ -13,7 +13,11 @@ pub fn block(db: &Database, issue_id: i64, blocker_id: i64) -> Result<()> {
     }
 
     if db.add_dependency(issue_id, blocker_id)? {
-        println!("Issue {} is now blocked by {}", format_issue_id(issue_id), format_issue_id(blocker_id));
+        println!(
+            "Issue {} is now blocked by {}",
+            format_issue_id(issue_id),
+            format_issue_id(blocker_id)
+        );
     } else {
         println!("Dependency already exists");
     }
@@ -24,7 +28,8 @@ pub fn unblock(db: &Database, issue_id: i64, blocker_id: i64) -> Result<()> {
     if db.remove_dependency(issue_id, blocker_id)? {
         println!(
             "Removed: {} no longer blocked by {}",
-            format_issue_id(issue_id), format_issue_id(blocker_id)
+            format_issue_id(issue_id),
+            format_issue_id(blocker_id)
         );
     } else {
         println!("No such dependency found");
@@ -65,7 +70,12 @@ pub fn list_ready(db: &Database) -> Result<()> {
 
     println!("Ready issues (no blockers):");
     for issue in issues {
-        println!("  {:<5} {:8} {}", format_issue_id(issue.id), issue.priority, issue.title);
+        println!(
+            "  {:<5} {:8} {}",
+            format_issue_id(issue.id),
+            issue.priority,
+            issue.title
+        );
     }
 
     Ok(())

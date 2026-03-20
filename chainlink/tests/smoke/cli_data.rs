@@ -65,14 +65,32 @@ fn test_export_markdown_format() {
     h.run_ok(&["close", "2"]);
 
     let export_path = h.temp_dir.path().join("export.md");
-    h.run_ok(&["export", "-o", export_path.to_str().unwrap(), "-f", "markdown"]);
+    h.run_ok(&[
+        "export",
+        "-o",
+        export_path.to_str().unwrap(),
+        "-f",
+        "markdown",
+    ]);
 
     let content = fs::read_to_string(&export_path).expect("Failed to read export file");
 
-    assert!(content.contains("Open"), "Markdown should have Open section");
-    assert!(content.contains("Closed"), "Markdown should have Closed section");
-    assert!(content.contains("Open issue"), "Markdown should contain issue title");
-    assert!(content.contains("Closed issue"), "Markdown should contain closed issue title");
+    assert!(
+        content.contains("Open"),
+        "Markdown should have Open section"
+    );
+    assert!(
+        content.contains("Closed"),
+        "Markdown should have Closed section"
+    );
+    assert!(
+        content.contains("Open issue"),
+        "Markdown should contain issue title"
+    );
+    assert!(
+        content.contains("Closed issue"),
+        "Markdown should contain closed issue title"
+    );
 }
 
 #[test]

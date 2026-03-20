@@ -1,40 +1,51 @@
 use anyhow::Result;
 
 use crate::db::Database;
+use crate::token_usage::ParsedUsage;
 use crate::utils::format_issue_id;
 
-pub fn record(
-    db: &Database,
-    agent_id: &str,
-    model: &str,
-    input_tokens: i64,
-    output_tokens: i64,
-    cache_read_tokens: Option<i64>,
-    cache_creation_tokens: Option<i64>,
-    session_id: Option<i64>,
-) -> Result<()> {
-    let cost = crate::token_usage::estimate_cost(
-        model,
-        input_tokens,
-        output_tokens,
-        cache_read_tokens,
-        cache_creation_tokens,
-    );
-
-    let id = db.create_token_usage(
-        agent_id,
-        session_id,
-        input_tokens,
-        output_tokens,
-        cache_read_tokens,
-        cache_creation_tokens,
-        model,
-        cost,
-    )?;
+pub fn record(db: &Database, usage: &ParsedUsage) -> Result<()> {
+    let id = db.create_token_usage(usage)?;
 
     println!("Recorded usage #{}", id);
-    if let Some(c) = cost {
+    if let Some(c) = usage.cost_estimate {
         println!("  Estimated cost: ${:.4}", c);
+    }
+    Ok(())
+}
+
+pub fn show(db: &Database, id: i64, json: bool) -> Result<()> {
+    match db.get_token_usage(id)? {
+        Some(entry) => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(&entry)?);
+                return Ok(());
+            }
+            println!("Usage #{}", entry.id);
+            println!("  Agent:    {}", entry.agent_id);
+            println!("  Model:    {}", entry.model);
+            println!(
+                "  Time:     {}",
+                entry.timestamp.format("%Y-%m-%d %H:%M:%S")
+            );
+            if let Some(sid) = entry.session_id {
+                println!("  Session:  #{}", sid);
+            }
+            println!("  Input:    {} tokens", entry.input_tokens);
+            println!("  Output:   {} tokens", entry.output_tokens);
+            if let Some(cr) = entry.cache_read_tokens {
+                println!("  Cache read:     {} tokens", cr);
+            }
+            if let Some(cc) = entry.cache_creation_tokens {
+                println!("  Cache creation: {} tokens", cc);
+            }
+            if let Some(cost) = entry.cost_estimate {
+                println!("  Cost:     ${:.4}", cost);
+            }
+        }
+        None => {
+            println!("Usage record #{} not found.", id);
+        }
     }
     Ok(())
 }
@@ -156,6 +167,7 @@ fn truncate(s: &str, max: usize) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::token_usage::{parse_api_usage, RawTokenUsage};
     use tempfile::tempdir;
 
     fn setup_test_db() -> (Database, tempfile::TempDir) {
@@ -164,13 +176,26 @@ mod tests {
         (db, dir)
     }
 
+    fn make_usage(agent: &str, model: &str, input: i64, output: i64) -> ParsedUsage {
+        let raw = RawTokenUsage {
+            input_tokens: input,
+            output_tokens: output,
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
+        };
+        parse_api_usage(&raw, model, agent, None)
+    }
+
     #[test]
     fn test_record_and_list() {
         let (db, _dir) = setup_test_db();
 
-        record(&db, "worker-1", "claude-sonnet-4-6", 1000, 500, None, None, None).unwrap();
+        let usage = make_usage("worker-1", "claude-sonnet-4-6", 1000, 500);
+        record(&db, &usage).unwrap();
 
-        let entries = db.list_token_usage(None, None, None, None, None, None).unwrap();
+        let entries = db
+            .list_token_usage(None, None, None, None, None, None)
+            .unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].agent_id, "worker-1");
         assert_eq!(entries[0].input_tokens, 1000);
@@ -179,15 +204,31 @@ mod tests {
     }
 
     #[test]
+    fn test_show_existing() {
+        let (db, _dir) = setup_test_db();
+
+        let usage = make_usage("worker-1", "claude-sonnet-4-6", 1000, 500);
+        record(&db, &usage).unwrap();
+        show(&db, 1, false).unwrap();
+        show(&db, 1, true).unwrap();
+    }
+
+    #[test]
+    fn test_show_missing() {
+        let (db, _dir) = setup_test_db();
+        show(&db, 999, false).unwrap();
+    }
+
+    #[test]
     fn test_summary_aggregation() {
         let (db, _dir) = setup_test_db();
 
-        record(&db, "worker-1", "claude-opus-4-6", 1000, 500, None, None, None).unwrap();
-        record(&db, "worker-1", "claude-opus-4-6", 2000, 1000, None, None, None).unwrap();
-        record(&db, "worker-2", "claude-sonnet-4-6", 500, 200, None, None, None).unwrap();
+        record(&db, &make_usage("worker-1", "claude-opus-4-6", 1000, 500)).unwrap();
+        record(&db, &make_usage("worker-1", "claude-opus-4-6", 2000, 1000)).unwrap();
+        record(&db, &make_usage("worker-2", "claude-sonnet-4-6", 500, 200)).unwrap();
 
         let rows = db.get_usage_summary(None, None, None).unwrap();
-        assert_eq!(rows.len(), 2); // Two agent+model groups
+        assert_eq!(rows.len(), 2);
 
         let opus_row = rows.iter().find(|r| r.model.contains("opus")).unwrap();
         assert_eq!(opus_row.request_count, 2);
@@ -199,10 +240,12 @@ mod tests {
     fn test_list_filter_by_agent() {
         let (db, _dir) = setup_test_db();
 
-        record(&db, "worker-1", "claude-opus-4-6", 1000, 500, None, None, None).unwrap();
-        record(&db, "worker-2", "claude-opus-4-6", 2000, 1000, None, None, None).unwrap();
+        record(&db, &make_usage("worker-1", "claude-opus-4-6", 1000, 500)).unwrap();
+        record(&db, &make_usage("worker-2", "claude-opus-4-6", 2000, 1000)).unwrap();
 
-        let entries = db.list_token_usage(Some("worker-1"), None, None, None, None, None).unwrap();
+        let entries = db
+            .list_token_usage(Some("worker-1"), None, None, None, None, None)
+            .unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].agent_id, "worker-1");
     }

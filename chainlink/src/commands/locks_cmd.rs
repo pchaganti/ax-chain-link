@@ -161,6 +161,8 @@ pub fn sync_cmd(chainlink_dir: &Path) -> Result<()> {
     sync.fetch()?;
 
     println!("Sync complete.");
+    println!("  Remote: {}", sync.remote());
+    println!("  Cache:  {}", sync.cache_path().display());
 
     // Show lock count
     let locks = sync.read_locks()?;
@@ -175,17 +177,27 @@ pub fn sync_cmd(chainlink_dir: &Path) -> Result<()> {
         }
     }
 
-    // Verify GPG signature
+    // Load trust keyring for signature verification
+    let keyring = sync.read_keyring()?;
+
+    // Verify GPG signature and check trust
     match sync.verify_locks_signature()? {
         GpgVerification::Valid {
             commit,
             fingerprint,
         } => {
+            let trust_status = match &fingerprint {
+                Some(fp) if keyring.is_trusted(fp) => "TRUSTED",
+                Some(_) if keyring.trusted_fingerprints.is_empty() => "no keyring configured",
+                Some(_) => "NOT IN KEYRING",
+                None => "fingerprint unknown",
+            };
             println!(
                 "  Signature: VALID (commit {} fingerprint {})",
                 &commit[..8.min(commit.len())],
                 fingerprint.as_deref().unwrap_or("unknown")
             );
+            println!("  Trust: {}", trust_status);
         }
         GpgVerification::Unsigned { commit } => {
             println!(
@@ -206,7 +218,7 @@ pub fn sync_cmd(chainlink_dir: &Path) -> Result<()> {
     }
 
     // Show agent identity if configured
-    if let Ok(Some(agent)) = AgentConfig::load(chainlink_dir) {
+    if let Ok(Some(agent)) = AgentConfig::load(sync.chainlink_dir()) {
         println!("  Agent: {}", agent.agent_id);
         let my_locks = locks.agent_locks(&agent.agent_id);
         if !my_locks.is_empty() {

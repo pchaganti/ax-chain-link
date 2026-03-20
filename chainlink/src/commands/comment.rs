@@ -4,8 +4,15 @@ use crate::db::Database;
 use crate::utils::format_issue_id;
 
 const KNOWN_COMMENT_KINDS: &[&str] = &[
-    "note", "plan", "decision", "observation", "blocker",
-    "resolution", "result", "handoff", "human",
+    "note",
+    "plan",
+    "decision",
+    "observation",
+    "blocker",
+    "resolution",
+    "result",
+    "handoff",
+    "human",
 ];
 
 pub fn validate_comment_kind(kind: &str) -> bool {

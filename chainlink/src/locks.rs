@@ -91,8 +91,7 @@ impl LocksFile {
     /// Save the locks file to disk.
     pub fn save(&self, path: &Path) -> Result<()> {
         let json = serde_json::to_string_pretty(self)?;
-        std::fs::write(path, json)
-            .with_context(|| format!("Failed to write {}", path.display()))
+        std::fs::write(path, json).with_context(|| format!("Failed to write {}", path.display()))
     }
 }
 
@@ -230,10 +229,7 @@ mod tests {
     #[test]
     fn test_keyring_is_trusted() {
         let keyring = Keyring {
-            trusted_fingerprints: vec![
-                "AAAA1111".to_string(),
-                "BBBB2222".to_string(),
-            ],
+            trusted_fingerprints: vec!["AAAA1111".to_string(), "BBBB2222".to_string()],
         };
         assert!(keyring.is_trusted("AAAA1111"));
         assert!(keyring.is_trusted("BBBB2222"));

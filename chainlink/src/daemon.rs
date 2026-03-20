@@ -123,8 +123,7 @@ pub fn run_daemon(chainlink_dir: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         let flag = Arc::clone(&should_exit);
-        if let Err(e) =
-            signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&flag))
+        if let Err(e) = signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&flag))
         {
             tracing::warn!(
                 "could not register SIGTERM handler: {e} — graceful shutdown unavailable"
@@ -213,7 +212,7 @@ pub fn run_daemon(chainlink_dir: &Path) -> Result<()> {
 
         // Heartbeat: push agent heartbeat every N cycles (best-effort)
         heartbeat_counter += 1;
-        if heartbeat_counter % HEARTBEAT_EVERY_N == 0 {
+        if heartbeat_counter.is_multiple_of(HEARTBEAT_EVERY_N) {
             if let Ok(Some(agent)) = crate::identity::AgentConfig::load(chainlink_dir) {
                 if let Ok(sync) = crate::sync::SyncManager::new(chainlink_dir) {
                     let _ = sync.init_cache();

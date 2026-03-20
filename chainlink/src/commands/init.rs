@@ -240,7 +240,10 @@ mod tests {
         assert!(dir.path().join(".claude/hooks/session-start.py").exists());
         assert!(dir.path().join(".claude/hooks/pre-web-check.py").exists());
         assert!(dir.path().join(".claude/hooks/work-check.py").exists());
-        assert!(dir.path().join(".claude/hooks/chainlink_config.py").exists());
+        assert!(dir
+            .path()
+            .join(".claude/hooks/chainlink_config.py")
+            .exists());
         assert!(dir.path().join(".claude/mcp/safe-fetch-server.py").exists());
         assert!(dir.path().join(".mcp.json").exists());
     }

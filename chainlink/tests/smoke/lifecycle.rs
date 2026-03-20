@@ -189,9 +189,7 @@ fn test_session_end_without_start() {
     let result = h.run(&["session", "end"]);
     let combined = format!("{}{}", result.stdout, result.stderr);
     assert!(
-        !result.success
-            || combined.contains("No active")
-            || combined.contains("no active"),
+        !result.success || combined.contains("No active") || combined.contains("no active"),
         "session end without start should handle gracefully.\nstdout: {}\nstderr: {}",
         result.stdout,
         result.stderr,

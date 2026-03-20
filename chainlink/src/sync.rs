@@ -332,7 +332,9 @@ impl SyncManager {
                     return Ok(false);
                 }
                 if self.git_in_cache(&["add", "-A"]).is_err() {
-                    tracing::warn!("git add -A failed in dirty state cleanup, escalating to reset --hard HEAD");
+                    tracing::warn!(
+                        "git add -A failed in dirty state cleanup, escalating to reset --hard HEAD"
+                    );
                     self.git_in_cache(&["reset", "--hard", "HEAD"])?;
                     return Ok(true);
                 }
@@ -381,8 +383,7 @@ impl SyncManager {
 
         // Check for unpushed local commits
         let remote_ref = format!("{}/{}", self.remote, HUB_BRANCH);
-        let log_result =
-            self.git_in_cache(&["log", &format!("{}..HEAD", remote_ref), "--oneline"]);
+        let log_result = self.git_in_cache(&["log", &format!("{}..HEAD", remote_ref), "--oneline"]);
 
         match &log_result {
             Ok(output) => {
@@ -393,9 +394,7 @@ impl SyncManager {
                 }
             }
             Err(_) => {
-                tracing::warn!(
-                    "cannot determine unpushed commit count; keeping local state"
-                );
+                tracing::warn!("cannot determine unpushed commit count; keeping local state");
                 return Ok(());
             }
         }
@@ -590,12 +589,7 @@ impl SyncManager {
                             .is_err()
                         {
                             self.hub_health_check()?;
-                            self.git_in_cache(&[
-                                "pull",
-                                "--rebase",
-                                &self.remote,
-                                HUB_BRANCH,
-                            ])?;
+                            self.git_in_cache(&["pull", "--rebase", &self.remote, HUB_BRANCH])?;
                         }
                     } else {
                         return Err(e);
@@ -681,21 +675,11 @@ impl SyncManager {
                         if attempt < 2 {
                             self.check_divergence()?;
                             if self
-                                .git_in_cache(&[
-                                    "pull",
-                                    "--rebase",
-                                    &self.remote,
-                                    HUB_BRANCH,
-                                ])
+                                .git_in_cache(&["pull", "--rebase", &self.remote, HUB_BRANCH])
                                 .is_err()
                             {
                                 self.hub_health_check()?;
-                                self.git_in_cache(&[
-                                    "pull",
-                                    "--rebase",
-                                    &self.remote,
-                                    HUB_BRANCH,
-                                ])?;
+                                self.git_in_cache(&["pull", "--rebase", &self.remote, HUB_BRANCH])?;
                             }
                             continue;
                         }
@@ -711,11 +695,7 @@ impl SyncManager {
     // --- Heartbeats ---
 
     /// Write and push a heartbeat file for this agent.
-    pub fn push_heartbeat(
-        &self,
-        agent: &AgentConfig,
-        active_issue_id: Option<i64>,
-    ) -> Result<()> {
+    pub fn push_heartbeat(&self, agent: &AgentConfig, active_issue_id: Option<i64>) -> Result<()> {
         let heartbeat = Heartbeat {
             agent_id: agent.agent_id.clone(),
             last_heartbeat: Utc::now(),
@@ -767,13 +747,8 @@ impl SyncManager {
                     self.hub_health_check()?;
                     self.git_in_cache(&["pull", "--rebase", &self.remote, HUB_BRANCH])?;
                 }
-                if let Err(retry_err) =
-                    self.git_in_cache(&["push", &self.remote, HUB_BRANCH])
-                {
-                    tracing::warn!(
-                        "heartbeat push failed after retry: {}",
-                        retry_err
-                    );
+                if let Err(retry_err) = self.git_in_cache(&["push", &self.remote, HUB_BRANCH]) {
+                    tracing::warn!("heartbeat push failed after retry: {}", retry_err);
                 }
             }
         }
@@ -805,8 +780,7 @@ impl SyncManager {
     pub fn find_stale_locks(&self) -> Result<Vec<(i64, String)>> {
         let locks = self.read_locks()?;
         let heartbeats = self.read_heartbeats()?;
-        let timeout =
-            chrono::Duration::minutes(locks.settings.stale_lock_timeout_minutes as i64);
+        let timeout = chrono::Duration::minutes(locks.settings.stale_lock_timeout_minutes as i64);
         let now = Utc::now();
 
         let mut stale = Vec::new();
@@ -831,8 +805,7 @@ impl SyncManager {
     pub fn find_stale_locks_with_age(&self) -> Result<Vec<(i64, String, u64)>> {
         let locks = self.read_locks()?;
         let heartbeats = self.read_heartbeats()?;
-        let timeout =
-            chrono::Duration::minutes(locks.settings.stale_lock_timeout_minutes as i64);
+        let timeout = chrono::Duration::minutes(locks.settings.stale_lock_timeout_minutes as i64);
         let now = Utc::now();
 
         let mut stale = Vec::new();

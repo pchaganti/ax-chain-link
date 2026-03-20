@@ -50,26 +50,27 @@ pub fn check_lock(chainlink_dir: &Path, issue_id: i64) -> Result<LockStatus> {
         Err(_) => return Ok(LockStatus::NotConfigured),
     };
 
+    // Fast-path: if not locked at all, it's available
+    if !locks.is_locked(issue_id) {
+        return Ok(LockStatus::Available);
+    }
+
     // Check if locked by this agent
     if locks.is_locked_by(issue_id, &agent.agent_id) {
         return Ok(LockStatus::LockedBySelf);
     }
 
-    // Check if locked by someone else
-    match locks.get_lock(issue_id) {
-        Some(lock) => {
-            let stale = sync
-                .find_stale_locks()
-                .unwrap_or_default()
-                .iter()
-                .any(|(id, _)| *id == issue_id);
-            Ok(LockStatus::LockedByOther {
-                agent_id: lock.agent_id.clone(),
-                stale,
-            })
-        }
-        None => Ok(LockStatus::Available),
-    }
+    // Must be locked by someone else
+    let lock = locks.get_lock(issue_id).unwrap();
+    let stale = sync
+        .find_stale_locks()
+        .unwrap_or_default()
+        .iter()
+        .any(|(id, _)| *id == issue_id);
+    Ok(LockStatus::LockedByOther {
+        agent_id: lock.agent_id.clone(),
+        stale,
+    })
 }
 
 /// Read the `auto_steal_stale_locks` setting from hook-config.json.

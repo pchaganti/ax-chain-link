@@ -6,6 +6,8 @@ use super::{parse_datetime, Database};
 use crate::models::Session;
 
 impl Database {
+    /// Convenience wrapper for tests — production code uses `start_session_with_agent`.
+    #[cfg(test)]
     pub fn start_session(&self) -> Result<i64> {
         self.start_session_with_agent(None)
     }

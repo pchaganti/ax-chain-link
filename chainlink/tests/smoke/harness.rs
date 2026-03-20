@@ -42,11 +42,7 @@ impl SmokeHarness {
 
         // Run chainlink init
         let result = harness.run(&["init"]);
-        assert!(
-            result.success,
-            "chainlink init failed: {}",
-            result.stderr
-        );
+        assert!(result.success, "chainlink init failed: {}", result.stderr);
 
         harness
     }

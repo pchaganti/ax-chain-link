@@ -34,7 +34,12 @@ struct Cli {
     log_level: String,
 
     /// Log format (text, json)
-    #[arg(long, global = true, default_value = "text", env = "CHAINLINK_LOG_FORMAT")]
+    #[arg(
+        long,
+        global = true,
+        default_value = "text",
+        env = "CHAINLINK_LOG_FORMAT"
+    )]
     log_format: String,
 
     #[command(subcommand)]
@@ -132,7 +137,6 @@ enum Commands {
     // ========================================================================
     // Hidden backward-compatible aliases (flat commands)
     // ========================================================================
-
     /// Create a new issue (shortcut for `issue create`)
     #[command(hide = true)]
     Create {
@@ -663,6 +667,11 @@ enum UsageCommands {
         #[arg(long)]
         session: Option<i64>,
     },
+    /// Show details of a single usage record
+    Show {
+        /// Usage record ID
+        id: i64,
+    },
     /// List usage records
     List {
         /// Filter by agent ID
@@ -1179,12 +1188,10 @@ fn run() -> Result<()> {
         }
 
         // ====== Canonical hierarchical commands ======
-
         Commands::Issue { action } => dispatch_issue(action, quiet, json),
         Commands::Timer { action } => dispatch_timer(action),
 
         // ====== Hidden backward-compatible aliases ======
-
         Commands::Create {
             title,
             description,
@@ -1346,7 +1353,6 @@ fn run() -> Result<()> {
         Commands::TimerStop => dispatch_timer(Some(TimerCommands::Stop)),
 
         // ====== Non-issue, non-timer commands ======
-
         Commands::Export { output, format } => {
             let db = get_db()?;
             match format.as_str() {
@@ -1456,16 +1462,17 @@ fn run() -> Result<()> {
                     cache_read,
                     cache_creation,
                     session,
-                } => commands::usage::record(
-                    &db,
-                    &agent,
-                    &model,
-                    input_tokens,
-                    output_tokens,
-                    cache_read,
-                    cache_creation,
-                    session,
-                ),
+                } => {
+                    let raw = token_usage::RawTokenUsage {
+                        input_tokens,
+                        output_tokens,
+                        cache_read_input_tokens: cache_read,
+                        cache_creation_input_tokens: cache_creation,
+                    };
+                    let parsed = token_usage::parse_api_usage(&raw, &model, &agent, session);
+                    commands::usage::record(&db, &parsed)
+                }
+                UsageCommands::Show { id } => commands::usage::show(&db, id, json),
                 UsageCommands::List {
                     agent,
                     model,
@@ -1490,7 +1497,9 @@ fn run() -> Result<()> {
                     agent_id,
                     description,
                     force,
-                } => commands::agent::init(&chainlink_dir, &agent_id, description.as_deref(), force),
+                } => {
+                    commands::agent::init(&chainlink_dir, &agent_id, description.as_deref(), force)
+                }
                 AgentCommands::Status => commands::agent::status(&chainlink_dir),
             }
         }

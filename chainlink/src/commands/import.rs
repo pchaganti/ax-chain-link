@@ -76,7 +76,12 @@ fn import_issue(db: &Database, issue: &ExportedIssue, parent_id: Option<i64>) ->
         db.close_issue(id)?;
     }
 
-    println!("  Imported: {} -> {} {}", format_issue_id(issue.id), format_issue_id(id), issue.title);
+    println!(
+        "  Imported: {} -> {} {}",
+        format_issue_id(issue.id),
+        format_issue_id(id),
+        issue.title
+    );
     Ok(id)
 }
 

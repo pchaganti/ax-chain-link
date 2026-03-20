@@ -85,7 +85,10 @@ pub fn status(db: &Database) -> Result<()> {
         if let Some(issue) = db.get_issue(issue_id)? {
             println!("Working on: {} {}", format_issue_id(issue.id), issue.title);
         } else {
-            println!("Working on: {} (issue not found)", format_issue_id(issue_id));
+            println!(
+                "Working on: {} (issue not found)",
+                format_issue_id(issue_id)
+            );
         }
     } else {
         println!("Working on: (none)");
@@ -161,7 +164,11 @@ pub fn work(db: &Database, issue_id: i64, chainlink_dir: &Path) -> Result<()> {
     lock_check::enforce_lock(chainlink_dir, issue_id, db)?;
 
     db.set_session_issue(session.id, issue_id)?;
-    println!("Now working on: {} {}", format_issue_id(issue.id), issue.title);
+    println!(
+        "Now working on: {} {}",
+        format_issue_id(issue.id),
+        issue.title
+    );
     Ok(())
 }
 

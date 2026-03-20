@@ -32,7 +32,9 @@ impl Database {
                     issue_id: row.get(1)?,
                     content: row.get(2)?,
                     created_at: parse_datetime(row.get::<_, String>(3)?),
-                    kind: row.get::<_, Option<String>>(4)?.unwrap_or_else(|| "note".to_string()),
+                    kind: row
+                        .get::<_, Option<String>>(4)?
+                        .unwrap_or_else(|| "note".to_string()),
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
