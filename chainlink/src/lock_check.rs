@@ -60,17 +60,21 @@ pub fn check_lock(chainlink_dir: &Path, issue_id: i64) -> Result<LockStatus> {
         return Ok(LockStatus::LockedBySelf);
     }
 
-    // Must be locked by someone else
-    let lock = locks.get_lock(issue_id).unwrap();
-    let stale = sync
-        .find_stale_locks()
-        .unwrap_or_default()
-        .iter()
-        .any(|(id, _)| *id == issue_id);
-    Ok(LockStatus::LockedByOther {
-        agent_id: lock.agent_id.clone(),
-        stale,
-    })
+    // Must be locked by someone else (is_locked returned true above)
+    match locks.get_lock(issue_id) {
+        Some(lock) => {
+            let stale = sync
+                .find_stale_locks()
+                .unwrap_or_default()
+                .iter()
+                .any(|(id, _)| *id == issue_id);
+            Ok(LockStatus::LockedByOther {
+                agent_id: lock.agent_id.clone(),
+                stale,
+            })
+        }
+        None => Ok(LockStatus::Available),
+    }
 }
 
 /// Read the `auto_steal_stale_locks` setting from hook-config.json.
