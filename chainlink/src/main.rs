@@ -1166,7 +1166,7 @@ fn main() -> Result<()> {
         .name("main".into())
         .stack_size(4 * 1024 * 1024)
         .spawn(run)
-        .expect("failed to spawn main thread")
+        .map_err(|e| anyhow::anyhow!("failed to spawn main thread: {e}"))?
         .join();
 
     match result {
