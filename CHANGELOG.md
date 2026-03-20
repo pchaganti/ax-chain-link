@@ -37,6 +37,19 @@ context-compression resilience.
 - Database schema v7→v8 migration (adds `last_action` column to sessions, auto-applied on first use)
 
 ### Added
+- Update hook scripts for multi-agent lock awareness (#172)
+- Improve hook error messages to prevent Claude workarounds (#129)
+- Reorganize CLI into hierarchical subcommands with backward-compat aliases (#160)
+- Borrow nice-to-have improvements from crosslink fork (#165)
+- Expand test suite with smoke, adversarial, and property-based tests (#168)
+- Add clap env feature for environment variable CLI flag fallbacks (#164)
+- Improve transaction rollback error logging (#163)
+- Improve migration error handling with proper logging (#155)
+- Add rules.local override support for hook rule loading (#154)
+- Extract shared hook config module from duplicate hook code (#153)
+- Add signal handlers for graceful daemon shutdown (#152)
+- Add structured logging with tracing crate (#151)
+- Add input validation constants and functions for DB boundary (#147)
 - Update READMEs with hook configuration documentation (#119)
 - Split tracking instructions into per-mode markdown files (#118)
 - Make issue tracking strictness configurable (#117)
@@ -52,6 +65,8 @@ context-compression resilience.
 - `chainlink export` now outputs to stdout by default, use `-o` for file output
 
 ### Fixed
+- Fix git command normalization bypass in work-check hook (#145)
+- Fix PRAGMA user_version column name bug causing repeated v7 migration (#144)
 - Fix hooks to always find parent .chainlink directory regardless of cwd (#123)
 - Fix CI test failure on latest commit (#122)
 - Fix vscode engine version to match @types/vscode (#115)

@@ -2,16 +2,17 @@ use anyhow::{bail, Result};
 use std::io::{self, Write};
 
 use crate::db::Database;
+use crate::utils::format_issue_id;
 
 pub fn run(db: &Database, id: i64, force: bool) -> Result<()> {
     // Check if issue exists first
     let issue = match db.get_issue(id)? {
         Some(i) => i,
-        None => bail!("Issue #{} not found", id),
+        None => bail!("Issue {} not found", format_issue_id(id)),
     };
 
     if !force {
-        print!("Delete issue #{} \"{}\"? [y/N] ", id, issue.title);
+        print!("Delete issue {} \"{}\"? [y/N] ", format_issue_id(id), issue.title);
         io::stdout().flush()?;
 
         let mut input = String::new();
@@ -24,9 +25,9 @@ pub fn run(db: &Database, id: i64, force: bool) -> Result<()> {
     }
 
     if db.delete_issue(id)? {
-        println!("Deleted issue #{}", id);
+        println!("Deleted issue {}", format_issue_id(id));
     } else {
-        bail!("Failed to delete issue #{}", id);
+        bail!("Failed to delete issue {}", format_issue_id(id));
     }
 
     Ok(())
@@ -93,8 +94,8 @@ mod tests {
     fn test_delete_cascades_comments() {
         let (db, _dir) = setup_test_db();
         let issue_id = db.create_issue("Test", None, "medium").unwrap();
-        db.add_comment(issue_id, "Comment 1").unwrap();
-        db.add_comment(issue_id, "Comment 2").unwrap();
+        db.add_comment(issue_id, "Comment 1", "note").unwrap();
+        db.add_comment(issue_id, "Comment 2", "note").unwrap();
 
         run_force(&db, issue_id).unwrap();
 
@@ -266,7 +267,7 @@ mod tests {
             let issue_id = db.create_issue("Test", None, "medium").unwrap();
 
             for i in 0..count {
-                db.add_comment(issue_id, &format!("Comment {}", i)).unwrap();
+                db.add_comment(issue_id, &format!("Comment {}", i), "note").unwrap();
             }
 
             run_force(&db, issue_id).unwrap();

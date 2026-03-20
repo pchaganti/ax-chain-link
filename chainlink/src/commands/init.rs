@@ -11,83 +11,19 @@ const POST_EDIT_CHECK_PY: &str = include_str!("../../resources/claude/hooks/post
 const SESSION_START_PY: &str = include_str!("../../resources/claude/hooks/session-start.py");
 const PRE_WEB_CHECK_PY: &str = include_str!("../../resources/claude/hooks/pre-web-check.py");
 const WORK_CHECK_PY: &str = include_str!("../../resources/claude/hooks/work-check.py");
+const CHAINLINK_CONFIG_PY: &str = include_str!("../../resources/claude/hooks/chainlink_config.py");
 
 // Embed MCP server for safe web fetching
 const SAFE_FETCH_SERVER_PY: &str = include_str!("../../resources/claude/mcp/safe-fetch-server.py");
 const MCP_JSON: &str = include_str!("../../resources/mcp.json");
 
-// Embed sanitization patterns
-const SANITIZE_PATTERNS: &str =
-    include_str!("../../resources/chainlink/rules/sanitize-patterns.txt");
-
 // Embed hook configuration
 const HOOK_CONFIG_JSON: &str = include_str!("../../resources/chainlink/hook-config.json");
 
-// Embed tracking mode rule files
-const RULE_TRACKING_STRICT: &str =
-    include_str!("../../resources/chainlink/rules/tracking-strict.md");
-const RULE_TRACKING_NORMAL: &str =
-    include_str!("../../resources/chainlink/rules/tracking-normal.md");
-const RULE_TRACKING_RELAXED: &str =
-    include_str!("../../resources/chainlink/rules/tracking-relaxed.md");
-
-// Embed rule files at compile time from resources/chainlink/rules/
-const RULE_GLOBAL: &str = include_str!("../../resources/chainlink/rules/global.md");
-const RULE_PROJECT: &str = include_str!("../../resources/chainlink/rules/project.md");
-const RULE_RUST: &str = include_str!("../../resources/chainlink/rules/rust.md");
-const RULE_PYTHON: &str = include_str!("../../resources/chainlink/rules/python.md");
-const RULE_JAVASCRIPT: &str = include_str!("../../resources/chainlink/rules/javascript.md");
-const RULE_TYPESCRIPT: &str = include_str!("../../resources/chainlink/rules/typescript.md");
-const RULE_TYPESCRIPT_REACT: &str =
-    include_str!("../../resources/chainlink/rules/typescript-react.md");
-const RULE_JAVASCRIPT_REACT: &str =
-    include_str!("../../resources/chainlink/rules/javascript-react.md");
-const RULE_GO: &str = include_str!("../../resources/chainlink/rules/go.md");
-const RULE_JAVA: &str = include_str!("../../resources/chainlink/rules/java.md");
-const RULE_C: &str = include_str!("../../resources/chainlink/rules/c.md");
-const RULE_CPP: &str = include_str!("../../resources/chainlink/rules/cpp.md");
-const RULE_CSHARP: &str = include_str!("../../resources/chainlink/rules/csharp.md");
-const RULE_RUBY: &str = include_str!("../../resources/chainlink/rules/ruby.md");
-const RULE_PHP: &str = include_str!("../../resources/chainlink/rules/php.md");
-const RULE_SWIFT: &str = include_str!("../../resources/chainlink/rules/swift.md");
-const RULE_KOTLIN: &str = include_str!("../../resources/chainlink/rules/kotlin.md");
-const RULE_SCALA: &str = include_str!("../../resources/chainlink/rules/scala.md");
-const RULE_ZIG: &str = include_str!("../../resources/chainlink/rules/zig.md");
-const RULE_ODIN: &str = include_str!("../../resources/chainlink/rules/odin.md");
-const RULE_ELIXIR: &str = include_str!("../../resources/chainlink/rules/elixir.md");
-const RULE_ELIXIR_PHOENIX: &str = include_str!("../../resources/chainlink/rules/elixir-phoenix.md");
-const RULE_WEB: &str = include_str!("../../resources/chainlink/rules/web.md");
-
-/// All rule files to deploy
-const RULE_FILES: &[(&str, &str)] = &[
-    ("global.md", RULE_GLOBAL),
-    ("project.md", RULE_PROJECT),
-    ("rust.md", RULE_RUST),
-    ("python.md", RULE_PYTHON),
-    ("javascript.md", RULE_JAVASCRIPT),
-    ("typescript.md", RULE_TYPESCRIPT),
-    ("typescript-react.md", RULE_TYPESCRIPT_REACT),
-    ("javascript-react.md", RULE_JAVASCRIPT_REACT),
-    ("go.md", RULE_GO),
-    ("java.md", RULE_JAVA),
-    ("c.md", RULE_C),
-    ("cpp.md", RULE_CPP),
-    ("csharp.md", RULE_CSHARP),
-    ("ruby.md", RULE_RUBY),
-    ("php.md", RULE_PHP),
-    ("swift.md", RULE_SWIFT),
-    ("kotlin.md", RULE_KOTLIN),
-    ("scala.md", RULE_SCALA),
-    ("zig.md", RULE_ZIG),
-    ("odin.md", RULE_ODIN),
-    ("elixir.md", RULE_ELIXIR),
-    ("elixir-phoenix.md", RULE_ELIXIR_PHOENIX),
-    ("web.md", RULE_WEB),
-    ("sanitize-patterns.txt", SANITIZE_PATTERNS),
-    ("tracking-strict.md", RULE_TRACKING_STRICT),
-    ("tracking-normal.md", RULE_TRACKING_NORMAL),
-    ("tracking-relaxed.md", RULE_TRACKING_RELAXED),
-];
+// Auto-generated rule file includes from build.rs
+// Includes all RULE_* constants and RULE_FILES array
+// Adding a new rule = just drop a .md/.txt file in resources/chainlink/rules/
+include!(concat!(env!("OUT_DIR"), "/rules_gen.rs"));
 
 /// Merge chainlink's MCP server entries into an existing `.mcp.json`, or create it fresh.
 /// Returns a list of warnings (e.g. overwritten keys) for the caller to display.
@@ -199,6 +135,23 @@ pub fn run(path: &Path, force: bool) -> Result<()> {
         }
     }
 
+    // Create rules.local/ directory for machine-local rule overrides (gitignored)
+    let rules_local_dir = chainlink_dir.join("rules.local");
+    if !rules_local_dir.exists() {
+        fs::create_dir_all(&rules_local_dir)
+            .context("Failed to create .chainlink/rules.local directory")?;
+    }
+
+    // Write .chainlink/.gitignore for machine-local files
+    let inner_gitignore = chainlink_dir.join(".gitignore");
+    if !inner_gitignore.exists() || force {
+        fs::write(
+            &inner_gitignore,
+            "# Machine-local overrides (not committed)\nrules.local/\nhook-config.local.json\n.cache/\nagent.json\n.locks-cache/\n",
+        )
+        .context("Failed to write .chainlink/.gitignore")?;
+    }
+
     // Create .claude directory and hooks (or update if force)
     if !claude_exists || force {
         fs::create_dir_all(&hooks_dir).context("Failed to create .claude/hooks directory")?;
@@ -222,6 +175,9 @@ pub fn run(path: &Path, force: bool) -> Result<()> {
 
         fs::write(hooks_dir.join("work-check.py"), WORK_CHECK_PY)
             .context("Failed to write work-check.py")?;
+
+        fs::write(hooks_dir.join("chainlink_config.py"), CHAINLINK_CONFIG_PY)
+            .context("Failed to write chainlink_config.py")?;
 
         // Create MCP server directory and write safe-fetch server
         let mcp_dir = claude_dir.join("mcp");
@@ -284,6 +240,7 @@ mod tests {
         assert!(dir.path().join(".claude/hooks/session-start.py").exists());
         assert!(dir.path().join(".claude/hooks/pre-web-check.py").exists());
         assert!(dir.path().join(".claude/hooks/work-check.py").exists());
+        assert!(dir.path().join(".claude/hooks/chainlink_config.py").exists());
         assert!(dir.path().join(".claude/mcp/safe-fetch-server.py").exists());
         assert!(dir.path().join(".mcp.json").exists());
     }
@@ -653,7 +610,7 @@ mod tests {
         assert!(!WORK_CHECK_PY.is_empty());
         assert!(!SAFE_FETCH_SERVER_PY.is_empty());
         assert!(!MCP_JSON.is_empty());
-        assert!(!SANITIZE_PATTERNS.is_empty());
+        assert!(!RULE_SANITIZE_PATTERNS.is_empty());
         assert!(!HOOK_CONFIG_JSON.is_empty());
         assert!(!RULE_TRACKING_STRICT.is_empty());
         assert!(!RULE_TRACKING_NORMAL.is_empty());

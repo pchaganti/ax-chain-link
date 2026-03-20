@@ -116,10 +116,30 @@ pub fn run_daemon(chainlink_dir: &Path) -> Result<()> {
     println!("Watching: {}", chainlink_dir.display());
     println!("Flush interval: {} seconds", FLUSH_INTERVAL_SECS);
 
+    // Graceful shutdown flag
+    let should_exit = Arc::new(AtomicBool::new(false));
+
+    // Register signal handlers for graceful shutdown (Unix only)
+    #[cfg(unix)]
+    {
+        let flag = Arc::clone(&should_exit);
+        if let Err(e) =
+            signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&flag))
+        {
+            tracing::warn!(
+                "could not register SIGTERM handler: {e} — graceful shutdown unavailable"
+            );
+        }
+        if let Err(e) = signal_hook::flag::register(signal_hook::consts::SIGINT, flag) {
+            tracing::warn!(
+                "could not register SIGINT handler: {e} — graceful shutdown unavailable"
+            );
+        }
+    }
+
     // Zombie prevention: Monitor stdin for closure.
     // When the parent process (VS Code) dies, stdin will be closed.
     // This thread detects that and signals the main loop to exit.
-    let should_exit = Arc::new(AtomicBool::new(false));
     let should_exit_clone = Arc::clone(&should_exit);
 
     thread::spawn(move || {
@@ -131,13 +151,13 @@ pub fn run_daemon(chainlink_dir: &Path) -> Result<()> {
             match stdin.read(&mut buf) {
                 Ok(0) => {
                     // EOF - parent closed stdin, time to exit
-                    eprintln!("Stdin closed, daemon shutting down (zombie prevention)");
+                    tracing::info!("Stdin closed, daemon shutting down (zombie prevention)");
                     should_exit_clone.store(true, Ordering::SeqCst);
                     break;
                 }
                 Err(_) => {
                     // Error reading stdin - parent likely crashed
-                    eprintln!("Stdin error, daemon shutting down (zombie prevention)");
+                    tracing::warn!("Stdin error, daemon shutting down (zombie prevention)");
                     should_exit_clone.store(true, Ordering::SeqCst);
                     break;
                 }
@@ -149,10 +169,13 @@ pub fn run_daemon(chainlink_dir: &Path) -> Result<()> {
         }
     });
 
+    let mut heartbeat_counter: u64 = 0;
+    const HEARTBEAT_EVERY_N: u64 = 5; // 5 * 30s = 2.5 min
+
     loop {
-        // Check if we should exit (stdin closed)
+        // Check if we should exit (stdin closed or signal received)
         if should_exit.load(Ordering::SeqCst) {
-            println!("Daemon exiting due to parent termination");
+            println!("Daemon exiting due to shutdown signal");
             break;
         }
 
@@ -160,13 +183,15 @@ pub fn run_daemon(chainlink_dir: &Path) -> Result<()> {
 
         // Check again after sleep
         if should_exit.load(Ordering::SeqCst) {
-            println!("Daemon exiting due to parent termination");
+            println!("Daemon exiting due to shutdown signal");
             break;
         }
 
         // Auto-flush: read current session and write to session.json
+        let mut active_issue_id = None;
         if let Ok(db) = Database::open(&db_path) {
             if let Ok(Some(session)) = db.get_current_session() {
+                active_issue_id = session.active_issue_id;
                 let session_data = serde_json::json!({
                     "session_id": session.id,
                     "started_at": session.started_at.to_rfc3339(),
@@ -175,7 +200,7 @@ pub fn run_daemon(chainlink_dir: &Path) -> Result<()> {
 
                 if let Ok(json) = serde_json::to_string_pretty(&session_data) {
                     if let Err(e) = fs::write(&session_file, json) {
-                        eprintln!("Failed to write session file: {}", e);
+                        tracing::warn!("Failed to write session file: {}", e);
                     } else {
                         println!(
                             "Session flushed at {}",
@@ -185,6 +210,27 @@ pub fn run_daemon(chainlink_dir: &Path) -> Result<()> {
                 }
             }
         }
+
+        // Heartbeat: push agent heartbeat every N cycles (best-effort)
+        heartbeat_counter += 1;
+        if heartbeat_counter % HEARTBEAT_EVERY_N == 0 {
+            if let Ok(Some(agent)) = crate::identity::AgentConfig::load(chainlink_dir) {
+                if let Ok(sync) = crate::sync::SyncManager::new(chainlink_dir) {
+                    let _ = sync.init_cache();
+                    if let Err(e) = sync.push_heartbeat(&agent, active_issue_id) {
+                        tracing::warn!("Heartbeat push failed: {}", e);
+                    } else {
+                        tracing::info!("Heartbeat pushed for agent '{}'", agent.agent_id);
+                    }
+                }
+            }
+        }
+    }
+
+    // Cleanup PID file on graceful exit
+    let pid_file = chainlink_dir.join("daemon.pid");
+    if pid_file.exists() {
+        fs::remove_file(&pid_file).ok();
     }
 
     Ok(())

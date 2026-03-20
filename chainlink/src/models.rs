@@ -20,6 +20,12 @@ pub struct Comment {
     pub issue_id: i64,
     pub content: String,
     pub created_at: DateTime<Utc>,
+    #[serde(default = "default_comment_kind")]
+    pub kind: String,
+}
+
+fn default_comment_kind() -> String {
+    "note".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -30,6 +36,26 @@ pub struct Session {
     pub active_issue_id: Option<i64>,
     pub handoff_notes: Option<String>,
     pub last_action: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TokenUsage {
+    pub id: i64,
+    pub agent_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<i64>,
+    pub timestamp: DateTime<Utc>,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_read_tokens: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_creation_tokens: Option<i64>,
+    pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_estimate: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -148,6 +174,7 @@ mod tests {
             issue_id: 42,
             content: "A comment".to_string(),
             created_at: Utc::now(),
+            kind: "note".to_string(),
         };
 
         let json = serde_json::to_string(&comment).unwrap();
@@ -165,6 +192,7 @@ mod tests {
             issue_id: 1,
             content: "".to_string(),
             created_at: Utc::now(),
+            kind: "note".to_string(),
         };
 
         let json = serde_json::to_string(&comment).unwrap();
@@ -184,6 +212,7 @@ mod tests {
             active_issue_id: Some(5),
             handoff_notes: Some("Notes here".to_string()),
             last_action: None,
+            agent_id: None,
         };
 
         let json = serde_json::to_string(&session).unwrap();
@@ -204,6 +233,7 @@ mod tests {
             active_issue_id: None,
             handoff_notes: Some("Final notes".to_string()),
             last_action: None,
+            agent_id: None,
         };
 
         let json = serde_json::to_string(&session).unwrap();
@@ -296,6 +326,7 @@ mod tests {
                 issue_id,
                 content: content.clone(),
                 created_at: Utc::now(),
+                kind: "note".to_string(),
             };
 
             let json = serde_json::to_string(&comment).unwrap();
@@ -319,6 +350,7 @@ mod tests {
                 active_issue_id,
                 handoff_notes: handoff_notes.clone(),
                 last_action: None,
+                agent_id: None,
             };
 
             let json = serde_json::to_string(&session).unwrap();

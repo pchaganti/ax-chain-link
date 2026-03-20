@@ -5,57 +5,20 @@ Session start hook that loads chainlink context and auto-starts sessions.
 
 import json
 import re
-import subprocess
 import sys
 import os
-from datetime import datetime, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from chainlink_config import find_chainlink_dir, run_chainlink
 
 
 # Sessions older than this (in hours) are considered stale and auto-ended
 STALE_SESSION_HOURS = 4
 
 
-def run_chainlink(args):
-    """Run a chainlink command and return output."""
-    try:
-        result = subprocess.run(
-            ["chainlink"] + args,
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        return result.stdout.strip() if result.returncode == 0 else None
-    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
-        return None
-
-
 def check_chainlink_initialized():
-    """Check if .chainlink directory exists.
-
-    Prefers the project root derived from the hook script's own path
-    (reliable even when cwd is a subdirectory), falling back to walking
-    up from cwd.
-    """
-    # Primary: resolve from script location (.claude/hooks/ -> project root)
-    try:
-        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        if os.path.isdir(os.path.join(root, ".chainlink")):
-            return True
-    except (NameError, OSError):
-        pass
-
-    # Fallback: walk up from cwd
-    current = os.getcwd()
-    while True:
-        candidate = os.path.join(current, ".chainlink")
-        if os.path.isdir(candidate):
-            return True
-        parent = os.path.dirname(current)
-        if parent == current:
-            break
-        current = parent
-
-    return False
+    """Check if .chainlink directory exists."""
+    return find_chainlink_dir() is not None
 
 
 def get_session_age_minutes():
@@ -181,6 +144,21 @@ def main():
     if session_status:
         context_parts.append(f"## Current Session\n{session_status}")
 
+    # Sync lock state from remote (best-effort, non-blocking)
+    sync_result = run_chainlink(["sync"], timeout=10)
+    if sync_result:
+        context_parts.append(f"## Lock Sync\n{sync_result}")
+
+    # Show current lock status
+    locks_result = run_chainlink(["locks", "list"])
+    if locks_result and "No locks" not in locks_result:
+        context_parts.append(f"## Active Locks\n{locks_result}")
+
+    # Show agent identity if configured
+    agent_result = run_chainlink(["agent", "status"])
+    if agent_result and "No agent" not in agent_result:
+        context_parts.append(f"## Agent Identity\n{agent_result}")
+
     # Get ready issues (unblocked work)
     ready_issues = run_chainlink(["ready"])
     if ready_issues:
@@ -198,6 +176,8 @@ def main():
 - Use `chainlink session action "..."` to record breadcrumbs before context compression
 - Add comments as you discover things: `chainlink comment <id> "..."`
 - End with handoff notes: `chainlink session end --notes "..."`
+- Use `chainlink locks list` to see which issues are claimed by agents
+- Use `chainlink sync` to fetch latest lock state from remote
 </chainlink-session-context>""")
 
     print("\n\n".join(context_parts))

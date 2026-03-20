@@ -140,6 +140,40 @@ def run_linter(file_path, max_errors=10):
                 except FileNotFoundError:
                     pass
 
+        elif ext in ('.ex', '.exs'):
+            # Elixir: run mix format --check-formatted, then mix credo if available
+            project_root = find_project_root(file_path, ['mix.exs'])
+            if project_root:
+                result = subprocess.run(
+                    ['mix', 'format', '--check-formatted', file_path],
+                    cwd=project_root,
+                    capture_output=True,
+                    text=True,
+                    timeout=15
+                )
+                if result.stderr:
+                    for line in result.stderr.split('\n'):
+                        if line.strip():
+                            errors.append(line.strip()[:100])
+                            if len(errors) >= max_errors:
+                                break
+                # Try credo if available
+                try:
+                    result = subprocess.run(
+                        ['mix', 'credo', '--strict', '--format', 'oneline'],
+                        cwd=project_root,
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    for line in result.stdout.split('\n'):
+                        if line.strip() and ':' in line:
+                            errors.append(line.strip()[:100])
+                            if len(errors) >= max_errors:
+                                break
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    pass  # credo not available, skip
+
         elif ext == '.go':
             # Go: run go vet
             project_root = find_project_root(file_path, ['go.mod'])
@@ -225,6 +259,11 @@ def find_test_files(file_path, project_root):
         test_patterns = [
             os.path.join(os.path.dirname(file_path), f'{name_without_ext}_test.go'),
         ]
+    elif ext in ('.ex', '.exs'):
+        test_patterns = [
+            os.path.join(project_root, 'test', '**', f'{name_without_ext}_test.exs'),
+            os.path.join(project_root, 'test', '**', f'*{name_without_ext}*_test.exs'),
+        ]
 
     found = []
     for pattern in test_patterns:
@@ -239,7 +278,7 @@ def get_test_reminder(file_path, project_root):
         return None  # Editing a test file, no reminder needed
 
     ext = os.path.splitext(file_path)[1]
-    code_extensions = ('.rs', '.py', '.js', '.ts', '.tsx', '.jsx', '.go')
+    code_extensions = ('.rs', '.py', '.js', '.ts', '.tsx', '.jsx', '.go', '.ex', '.exs', '.heex')
 
     if ext not in code_extensions:
         return None
@@ -282,6 +321,9 @@ def get_test_reminder(file_path, project_root):
             test_cmd = 'npm test'
     elif ext == '.go' and project_root:
         test_cmd = 'go test ./...'
+    elif ext in ('.ex', '.exs') and project_root:
+        if os.path.exists(os.path.join(project_root, 'mix.exs')):
+            test_cmd = 'mix test'
 
     if test_files or test_cmd:
         msg = "🧪 TEST REMINDER: Code modified since last test run."
@@ -311,7 +353,7 @@ def main():
     code_extensions = (
         '.rs', '.py', '.js', '.ts', '.tsx', '.jsx', '.go', '.java',
         '.c', '.cpp', '.h', '.hpp', '.cs', '.rb', '.php', '.swift',
-        '.kt', '.scala', '.zig', '.odin'
+        '.kt', '.scala', '.zig', '.odin', '.ex', '.exs', '.heex'
     )
 
     if not any(file_path.endswith(ext) for ext in code_extensions):

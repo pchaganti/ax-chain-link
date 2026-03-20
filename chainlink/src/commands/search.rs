@@ -2,6 +2,7 @@ use anyhow::Result;
 use serde_json;
 
 use crate::db::Database;
+use crate::utils::format_issue_id;
 
 pub fn run_json(db: &Database, query: &str) -> Result<()> {
     let results = db.search_issues(query)?;
@@ -23,12 +24,12 @@ pub fn run(db: &Database, query: &str) -> Result<()> {
         let status_marker = if issue.status == "closed" { "✓" } else { " " };
         let parent_str = issue
             .parent_id
-            .map(|p| format!(" (sub of #{})", p))
+            .map(|p| format!(" (sub of {})", format_issue_id(p)))
             .unwrap_or_default();
 
         println!(
-            "#{:<4} [{}] {:8} {}{} {}",
-            issue.id,
+            "{:<5} [{}] {:8} {}{} {}",
+            format_issue_id(issue.id),
             status_marker,
             issue.priority,
             issue.title,
@@ -204,7 +205,7 @@ mod tests {
     fn test_search_finds_in_comments() {
         let (db, _dir) = setup_test_db();
         let id = db.create_issue("Generic issue", None, "medium").unwrap();
-        db.add_comment(id, "Found the root cause in authentication module")
+        db.add_comment(id, "Found the root cause in authentication module", "note")
             .unwrap();
 
         run(&db, "authentication").unwrap();

@@ -2128,15 +2128,15 @@ fn test_milestone_delete_nonexistent() {
 
 // ==================== Security & Stress Tests ====================
 
-/// Test with very long title (potential buffer overflow / memory issues)
+/// Test with very long title — within limit should succeed, over limit should fail
 #[test]
 fn test_stress_very_long_title() {
     let dir = tempdir().unwrap();
     init_chainlink(dir.path());
 
-    let long_title = "A".repeat(10000);
-    let (success, stdout, _) = run_chainlink(dir.path(), &["create", &long_title]);
-
+    // Within the 512-char limit: should succeed
+    let ok_title = "A".repeat(512);
+    let (success, stdout, _) = run_chainlink(dir.path(), &["create", &ok_title]);
     assert!(success);
     assert!(stdout.contains("#1"));
 
@@ -2146,6 +2146,11 @@ fn test_stress_very_long_title() {
 
     let (success, _, _) = run_chainlink(dir.path(), &["show", "1"]);
     assert!(success);
+
+    // Over the 512-char limit: should fail
+    let too_long = "A".repeat(513);
+    let (success, _, _) = run_chainlink(dir.path(), &["create", &too_long]);
+    assert!(!success);
 }
 
 /// Test with very long description

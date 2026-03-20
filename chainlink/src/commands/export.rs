@@ -25,6 +25,12 @@ pub struct ExportedIssue {
 pub struct ExportedComment {
     pub content: String,
     pub created_at: String,
+    #[serde(default = "default_comment_kind")]
+    pub kind: String,
+}
+
+fn default_comment_kind() -> String {
+    "note".to_string()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -51,6 +57,7 @@ fn export_issue(db: &Database, issue: &Issue) -> Result<ExportedIssue> {
             .map(|c| ExportedComment {
                 content: c.content,
                 created_at: c.created_at.to_rfc3339(),
+                kind: c.kind,
             })
             .collect(),
         created_at: issue.created_at.to_rfc3339(),
@@ -227,8 +234,8 @@ mod tests {
     fn test_export_issue_with_comments() {
         let (db, _dir) = setup_test_db();
         let id = db.create_issue("Test issue", None, "medium").unwrap();
-        db.add_comment(id, "First comment").unwrap();
-        db.add_comment(id, "Second comment").unwrap();
+        db.add_comment(id, "First comment", "note").unwrap();
+        db.add_comment(id, "Second comment", "note").unwrap();
         let issue = db.get_issue(id).unwrap().unwrap();
         let exported = export_issue(&db, &issue).unwrap();
         assert_eq!(exported.comments.len(), 2);
@@ -325,6 +332,7 @@ mod tests {
                 comments: vec![ExportedComment {
                     content: "Comment".to_string(),
                     created_at: "2024-01-01T00:00:00Z".to_string(),
+                    kind: "note".to_string(),
                 }],
                 created_at: "2024-01-01T00:00:00Z".to_string(),
                 updated_at: "2024-01-01T00:00:00Z".to_string(),

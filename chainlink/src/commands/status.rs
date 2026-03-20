@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::db::Database;
+use crate::utils::format_issue_id;
 
 pub fn close(db: &Database, id: i64, update_changelog: bool, chainlink_dir: &Path) -> Result<()> {
     close_inner(db, id, update_changelog, chainlink_dir, false)
@@ -28,16 +29,16 @@ fn close_inner(
     let issue = db.get_issue(id)?;
     let issue = match issue {
         Some(i) => i,
-        None => bail!("Issue #{} not found", id),
+        None => bail!("Issue {} not found", format_issue_id(id)),
     };
     let labels = db.get_labels(id)?;
 
     if db.close_issue(id)? {
         if !quiet {
-            println!("Closed issue #{}", id);
+            println!("Closed issue {}", format_issue_id(id));
         }
     } else {
-        bail!("Issue #{} not found", id);
+        bail!("Issue {} not found", format_issue_id(id));
     }
 
     // Update changelog if requested
@@ -48,7 +49,7 @@ fn close_inner(
         // Create CHANGELOG.md if it doesn't exist
         if !changelog_path.exists() {
             if let Err(e) = create_changelog(&changelog_path) {
-                eprintln!("Warning: Could not create CHANGELOG.md: {}", e);
+                tracing::warn!("Could not create CHANGELOG.md: {}", e);
             } else {
                 println!("Created CHANGELOG.md");
             }
@@ -56,10 +57,10 @@ fn close_inner(
 
         if changelog_path.exists() {
             let category = determine_changelog_category(&labels);
-            let entry = format!("- {} (#{})\n", issue.title, id);
+            let entry = format!("- {} ({})\n", issue.title, format_issue_id(id));
 
             if let Err(e) = append_to_changelog(&changelog_path, &category, &entry) {
-                eprintln!("Warning: Could not update CHANGELOG.md: {}", e);
+                tracing::warn!("Could not update CHANGELOG.md: {}", e);
             } else if !quiet {
                 println!("Added to CHANGELOG.md under {}", category);
             }
@@ -164,7 +165,7 @@ pub fn close_all(
     for issue in &issues {
         match close(db, issue.id, update_changelog, chainlink_dir) {
             Ok(()) => closed_count += 1,
-            Err(e) => eprintln!("Warning: Failed to close #{}: {}", issue.id, e),
+            Err(e) => tracing::warn!("Failed to close {}: {}", format_issue_id(issue.id), e),
         }
     }
 
@@ -174,9 +175,9 @@ pub fn close_all(
 
 pub fn reopen(db: &Database, id: i64) -> Result<()> {
     if db.reopen_issue(id)? {
-        println!("Reopened issue #{}", id);
+        println!("Reopened issue {}", format_issue_id(id));
     } else {
-        bail!("Issue #{} not found", id);
+        bail!("Issue {} not found", format_issue_id(id));
     }
     Ok(())
 }

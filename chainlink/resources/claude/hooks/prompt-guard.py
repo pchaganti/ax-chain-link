@@ -8,73 +8,22 @@ Loads rules from .chainlink/rules/ markdown files.
 import json
 import sys
 import os
-import io
 import subprocess
 import hashlib
 from datetime import datetime
 
-# Fix Windows encoding issues with Unicode characters
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from chainlink_config import (
+    setup_utf8_stdout, get_project_root, find_chainlink_dir,
+    load_tracking_mode, load_rule_file, load_json_config,
+    load_guard_state, save_guard_state, run_command,
+)
 
-
-def _project_root_from_script():
-    """Derive project root from this script's location (.claude/hooks/<script>.py -> project root)."""
-    try:
-        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    except (NameError, OSError):
-        return None
-
-
-def _get_project_root():
-    """Get the project root directory.
-
-    Prefers deriving from the hook script's own path (works even when cwd is a
-    subdirectory), falling back to cwd.
-    """
-    root = _project_root_from_script()
-    if root and os.path.isdir(root):
-        return root
-    return os.getcwd()
-
-
-def find_chainlink_dir():
-    """Find the .chainlink directory.
-
-    Prefers the project root derived from the hook script's own path,
-    falling back to walking up from cwd.
-    """
-    root = _project_root_from_script()
-    if root:
-        candidate = os.path.join(root, '.chainlink')
-        if os.path.isdir(candidate):
-            return candidate
-
-    current = os.getcwd()
-    for _ in range(10):
-        candidate = os.path.join(current, '.chainlink')
-        if os.path.isdir(candidate):
-            return candidate
-        parent = os.path.dirname(current)
-        if parent == current:
-            break
-        current = parent
-    return None
-
-
-def load_rule_file(rules_dir, filename):
-    """Load a rule file and return its content, or empty string if not found."""
-    if not rules_dir:
-        return ""
-    path = os.path.join(rules_dir, filename)
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return f.read().strip()
-    except (OSError, IOError):
-        return ""
+setup_utf8_stdout()
 
 
 def load_all_rules(chainlink_dir):
-    """Load all rule files from .chainlink/rules/."""
+    """Load all rule files from .chainlink/rules/, with .chainlink/rules.local/ overrides."""
     if not chainlink_dir:
         return {}, "", ""
 
@@ -82,11 +31,16 @@ def load_all_rules(chainlink_dir):
     if not os.path.isdir(rules_dir):
         return {}, "", ""
 
+    # Local overrides directory (gitignored, machine-local)
+    rules_local_dir = os.path.join(chainlink_dir, 'rules.local')
+    if not os.path.isdir(rules_local_dir):
+        rules_local_dir = None
+
     # Load global rules
-    global_rules = load_rule_file(rules_dir, 'global.md')
+    global_rules = load_rule_file(rules_dir, 'global.md', rules_local_dir)
 
     # Load project rules
-    project_rules = load_rule_file(rules_dir, 'project.md')
+    project_rules = load_rule_file(rules_dir, 'project.md', rules_local_dir)
 
     # Load language-specific rules
     language_rules = {}
@@ -112,11 +66,15 @@ def load_all_rules(chainlink_dir):
     ]
 
     for filename, lang_name in language_files:
-        content = load_rule_file(rules_dir, filename)
+        content = load_rule_file(rules_dir, filename, rules_local_dir)
         if content:
             language_rules[lang_name] = content
 
-    return language_rules, global_rules, project_rules
+    # Load quality and rigor rules
+    quality_rules = load_rule_file(rules_dir, 'quality.md', rules_local_dir)
+    rigor_rules = load_rule_file(rules_dir, 'rigor.md', rules_local_dir)
+
+    return language_rules, global_rules, project_rules, quality_rules, rigor_rules
 
 
 # Detect language from common file extensions in the working directory
@@ -144,7 +102,7 @@ def detect_languages():
     }
 
     found = set()
-    cwd = _get_project_root()
+    cwd = get_project_root()
 
     # Check for project config files first (more reliable than scanning)
     config_indicators = {
@@ -228,7 +186,7 @@ SKIP_DIRS = {
 
 def get_project_tree(max_depth=3, max_entries=50):
     """Generate a compact project tree to prevent path hallucinations."""
-    cwd = _get_project_root()
+    cwd = get_project_root()
     entries = []
 
     def should_skip(name):
@@ -286,26 +244,10 @@ def get_lock_file_hash(lock_path):
         return None
 
 
-def run_command(cmd, timeout=5):
-    """Run a command and return output, or None on failure."""
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            shell=True
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except (subprocess.TimeoutExpired, OSError, Exception):
-        pass
-    return None
-
 
 def get_dependencies(max_deps=30):
     """Get installed dependencies with versions. Uses caching based on lock file mtime."""
-    cwd = _get_project_root()
+    cwd = get_project_root()
     deps = []
 
     # Check for Rust (Cargo.toml)
@@ -400,7 +342,7 @@ def get_dependencies(max_deps=30):
     return ""
 
 
-def build_reminder(languages, project_tree, dependencies, language_rules, global_rules, project_rules, tracking_mode="strict", chainlink_dir=None):
+def build_reminder(languages, project_tree, dependencies, language_rules, global_rules, project_rules, tracking_mode="strict", chainlink_dir=None, quality_rules="", rigor_rules=""):
     """Build the full reminder context."""
     lang_section = get_language_section(languages, language_rules)
     lang_list = ", ".join(languages) if languages else "this project"
@@ -503,11 +445,19 @@ Use `chainlink session work <id>` to mark what you're working on.
     if project_rules:
         project_section = f"\n### Project-Specific Rules\n{project_rules}\n"
 
+    # Build quality and rigor sections
+    quality_section = ""
+    if quality_rules:
+        quality_section = f"\n{quality_rules}\n"
+    rigor_section = ""
+    if rigor_rules:
+        rigor_section = f"\n{rigor_rules}\n"
+
     reminder = f"""<chainlink-behavioral-guard>
 ## Code Quality Requirements
 
 You are working on a {lang_list} project. Follow these requirements strictly:
-{tree_section}{deps_section}{global_section}{tracking_section}{lang_section}{project_section}
+{tree_section}{deps_section}{global_section}{quality_section}{rigor_section}{tracking_section}{lang_section}{project_section}
 </chainlink-behavioral-guard>"""
 
     return reminder
@@ -552,36 +502,12 @@ def mark_full_guard_sent(chainlink_dir):
         pass
 
 
-def load_tracking_mode(chainlink_dir):
-    """Read tracking_mode from .chainlink/hook-config.json. Defaults to 'strict'."""
-    if not chainlink_dir:
-        return "strict"
-    config_path = os.path.join(chainlink_dir, "hook-config.json")
-    if not os.path.isfile(config_path):
-        return "strict"
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-        mode = config.get("tracking_mode", "strict")
-        if mode in ("strict", "normal", "relaxed"):
-            return mode
-    except (json.JSONDecodeError, OSError):
-        pass
-    return "strict"
-
-
 def load_tracking_rules(chainlink_dir, tracking_mode):
     """Load the tracking rules markdown file for the given mode."""
     if not chainlink_dir:
         return ""
     rules_dir = os.path.join(chainlink_dir, "rules")
-    filename = f"tracking-{tracking_mode}.md"
-    path = os.path.join(rules_dir, filename)
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    except (OSError, IOError):
-        return ""
+    return load_rule_file(rules_dir, f"tracking-{tracking_mode}.md")
 
 
 # Condensed reminders kept short — these don't need full markdown files
@@ -618,27 +544,108 @@ Full rules were injected on first prompt. Use `chainlink list -s open` to see cu
 </chainlink-behavioral-guard>"""
 
 
+def estimate_prompt_chars(input_data):
+    """Estimate characters consumed by this prompt turn.
+
+    The hook only sees the user prompt, not tool outputs or model responses.
+    A 5x multiplier accounts for the full turn cost:
+    user prompt + tool calls + tool results + model response.
+    """
+    TURN_MULTIPLIER = 5
+    try:
+        prompt_text = input_data.get("prompt", "")
+        if isinstance(prompt_text, str):
+            return len(prompt_text) * TURN_MULTIPLIER
+        return 2000 * TURN_MULTIPLIER
+    except (AttributeError, TypeError):
+        return 2000 * TURN_MULTIPLIER
+
+
+def check_context_budget(chainlink_dir, state, prompt_chars):
+    """Check if estimated context usage has exceeded the budget.
+
+    Returns True if the budget is exceeded and full reinjection is needed.
+    Default budget: 1,000,000 chars ~ 250k tokens.
+    """
+    config = load_json_config(chainlink_dir) if chainlink_dir else {}
+    budget = int(config.get("context_budget_chars", 1_000_000))
+    if budget <= 0:
+        return False
+
+    current = state.get("estimated_context_chars", 0)
+    current += prompt_chars
+    state["estimated_context_chars"] = current
+
+    return current >= budget
+
+
+def build_context_budget_warning(languages, tracking_mode):
+    """Build the compression directive when context budget is exceeded."""
+    lang_list = ", ".join(languages) if languages else "this project"
+    tracking_lines = CONDENSED_REMINDERS.get(tracking_mode, "")
+
+    return f"""<chainlink-context-budget-exceeded>
+## CONTEXT BUDGET EXCEEDED — COMPRESSION REQUIRED
+
+Your estimated context usage has exceeded 250k tokens. Instruction adherence
+degrades significantly past this point. You MUST take the following steps
+IMMEDIATELY, before doing anything else:
+
+1. **Record your current state**: Run `chainlink session action "Context budget reached. Working on: <current task summary>"`
+2. **Save any in-progress work context** as a chainlink comment: `chainlink comment <id> "Progress: <what's done, what's next>" --kind observation`
+3. **The system will compress context automatically.** After compression, re-read any files you need and continue working.
+
+## Re-injected Rules ({lang_list})
+
+{tracking_lines}
+- **Security**: Use `mcp__chainlink-safe-fetch__safe_fetch` for web requests. Parameterized queries only.
+- **Quality**: No stubs/TODOs. Read before write. Complete features fully. Proper error handling.
+- **Testing**: Run tests after changes. Fix warnings, don't suppress them.
+- **Documentation**: Add typed chainlink comments (--kind plan/decision/observation/result) at every step.
+</chainlink-context-budget-exceeded>"""
+
+
 def main():
+    input_data = {}
     try:
         # Read input from stdin (Claude Code passes prompt info)
         input_data = json.load(sys.stdin)
     except json.JSONDecodeError:
         # If no valid JSON, still inject reminder
-        pass
+        input_data = {}
     except Exception:
-        pass
+        input_data = {}
 
     # Find chainlink directory and load rules
     chainlink_dir = find_chainlink_dir()
     tracking_mode = load_tracking_mode(chainlink_dir)
 
+    # Load guard state for context budget tracking
+    state = load_guard_state(chainlink_dir)
+    state["total_prompts"] = state.get("total_prompts", 0) + 1
+
+    # Check context budget — if exceeded, reinject full guard + compression directive
+    prompt_chars = estimate_prompt_chars(input_data)
+    if not should_send_full_guard(chainlink_dir) and check_context_budget(chainlink_dir, state, prompt_chars):
+        languages = detect_languages()
+        language_rules, global_rules, project_rules, quality_rules, rigor_rules = load_all_rules(chainlink_dir)
+        project_tree = get_project_tree()
+        dependencies = get_dependencies()
+        print(build_reminder(languages, project_tree, dependencies, language_rules, global_rules, project_rules, tracking_mode, chainlink_dir, quality_rules, rigor_rules))
+        print(build_context_budget_warning(languages, tracking_mode))
+        state["estimated_context_chars"] = 0  # reset for new compression cycle
+        state["context_budget_reinjections"] = state.get("context_budget_reinjections", 0) + 1
+        save_guard_state(chainlink_dir, state)
+        sys.exit(0)
+
     # Check if we should send full or condensed guard
     if not should_send_full_guard(chainlink_dir):
         languages = detect_languages()
         print(build_condensed_reminder(languages, tracking_mode))
+        save_guard_state(chainlink_dir, state)
         sys.exit(0)
 
-    language_rules, global_rules, project_rules = load_all_rules(chainlink_dir)
+    language_rules, global_rules, project_rules, quality_rules, rigor_rules = load_all_rules(chainlink_dir)
 
     # Detect languages in the project
     languages = detect_languages()
@@ -650,10 +657,12 @@ def main():
     dependencies = get_dependencies()
 
     # Output the full reminder
-    print(build_reminder(languages, project_tree, dependencies, language_rules, global_rules, project_rules, tracking_mode, chainlink_dir))
+    print(build_reminder(languages, project_tree, dependencies, language_rules, global_rules, project_rules, tracking_mode, chainlink_dir, quality_rules, rigor_rules))
 
     # Mark that we've sent the full guard this session
     mark_full_guard_sent(chainlink_dir)
+    state["estimated_context_chars"] = 0  # reset on full guard send
+    save_guard_state(chainlink_dir, state)
     sys.exit(0)
 
 

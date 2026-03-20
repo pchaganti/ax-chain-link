@@ -8,42 +8,11 @@ Triggered by PreToolUse on WebFetch|WebSearch to defend against prompt injection
 import json
 import sys
 import os
-import io
 
-# Fix Windows encoding issues with Unicode characters
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from chainlink_config import setup_utf8_stdout, find_chainlink_dir
 
-
-def _project_root_from_script():
-    """Derive project root from this script's location (.claude/hooks/<script>.py -> project root)."""
-    try:
-        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    except (NameError, OSError):
-        return None
-
-
-def find_chainlink_dir():
-    """Find the .chainlink directory.
-
-    Prefers the project root derived from the hook script's own path,
-    falling back to walking up from cwd.
-    """
-    root = _project_root_from_script()
-    if root:
-        candidate = os.path.join(root, '.chainlink')
-        if os.path.isdir(candidate):
-            return candidate
-
-    current = os.getcwd()
-    for _ in range(10):
-        candidate = os.path.join(current, '.chainlink')
-        if os.path.isdir(candidate):
-            return candidate
-        parent = os.path.dirname(current)
-        if parent == current:
-            break
-        current = parent
-    return None
+setup_utf8_stdout()
 
 
 def load_web_rules(chainlink_dir):

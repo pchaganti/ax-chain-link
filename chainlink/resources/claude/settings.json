@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -c \"import os,runpy;d=os.getcwd()\nwhile not os.path.isdir(os.path.join(d,'.claude')):\n p=os.path.dirname(d)\n if p==d:break\n d=p\nrunpy.run_path(os.path.join(d,'.claude','hooks','pre-web-check.py'),run_name='__main__')\"",
+            "command": "HOOK=\"$(git rev-parse --show-toplevel 2>/dev/null)/.claude/hooks/pre-web-check.py\"; if [ -f \"$HOOK\" ]; then python \"$HOOK\"; else exit 0; fi",
             "timeout": 5
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -c \"import os,runpy;d=os.getcwd()\nwhile not os.path.isdir(os.path.join(d,'.claude')):\n p=os.path.dirname(d)\n if p==d:break\n d=p\nrunpy.run_path(os.path.join(d,'.claude','hooks','work-check.py'),run_name='__main__')\"",
+            "command": "HOOK=\"$(git rev-parse --show-toplevel 2>/dev/null)/.claude/hooks/work-check.py\"; if [ -f \"$HOOK\" ]; then python \"$HOOK\"; else exit 0; fi",
             "timeout": 3
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -c \"import os,runpy;d=os.getcwd()\nwhile not os.path.isdir(os.path.join(d,'.claude')):\n p=os.path.dirname(d)\n if p==d:break\n d=p\nrunpy.run_path(os.path.join(d,'.claude','hooks','prompt-guard.py'),run_name='__main__')\"",
+            "command": "HOOK=\"$(git rev-parse --show-toplevel 2>/dev/null)/.claude/hooks/prompt-guard.py\"; if [ -f \"$HOOK\" ]; then python \"$HOOK\"; else exit 0; fi",
             "timeout": 5
           }
         ]
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -c \"import os,runpy;d=os.getcwd()\nwhile not os.path.isdir(os.path.join(d,'.claude')):\n p=os.path.dirname(d)\n if p==d:break\n d=p\nrunpy.run_path(os.path.join(d,'.claude','hooks','post-edit-check.py'),run_name='__main__')\"",
+            "command": "HOOK=\"$(git rev-parse --show-toplevel 2>/dev/null)/.claude/hooks/post-edit-check.py\"; if [ -f \"$HOOK\" ]; then python \"$HOOK\"; else exit 0; fi",
             "timeout": 5
           }
         ]
@@ -52,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -c \"import os,runpy;d=os.getcwd()\nwhile not os.path.isdir(os.path.join(d,'.claude')):\n p=os.path.dirname(d)\n if p==d:break\n d=p\nrunpy.run_path(os.path.join(d,'.claude','hooks','session-start.py'),run_name='__main__')\"",
+            "command": "HOOK=\"$(git rev-parse --show-toplevel 2>/dev/null)/.claude/hooks/session-start.py\"; if [ -f \"$HOOK\" ]; then python \"$HOOK\"; else exit 0; fi",
             "timeout": 10
           }
         ]

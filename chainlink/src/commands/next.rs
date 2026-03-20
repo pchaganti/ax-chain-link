@@ -1,7 +1,10 @@
 use anyhow::Result;
+use std::path::Path;
 
 use crate::db::Database;
+use crate::lock_check::{self, LockStatus};
 use crate::models::Issue;
+use crate::utils::format_issue_id;
 
 /// Progress tuple: (completed subissues, total subissues)
 type Progress = Option<(i32, i32)>;
@@ -32,7 +35,7 @@ fn calculate_progress(db: &Database, issue: &Issue) -> Result<Progress> {
     Ok(Some((closed, total)))
 }
 
-pub fn run(db: &Database) -> Result<()> {
+pub fn run(db: &Database, chainlink_dir: &Path) -> Result<()> {
     let ready = db.list_ready_issues()?;
 
     if ready.is_empty() {
@@ -49,6 +52,13 @@ pub fn run(db: &Database) -> Result<()> {
     for issue in ready {
         // Skip subissues - we want to recommend parent issues or standalone issues
         if issue.parent_id.is_some() {
+            continue;
+        }
+
+        // Best-effort: skip issues locked by other agents
+        if let Ok(LockStatus::LockedByOther { stale: false, .. }) =
+            lock_check::check_lock(chainlink_dir, issue.id)
+        {
             continue;
         }
 
@@ -72,9 +82,9 @@ pub fn run(db: &Database) -> Result<()> {
         // All ready issues are subissues, show them instead
         let ready = db.list_ready_issues()?;
         if let Some(issue) = ready.first() {
-            println!("Next: #{} [{}] {}", issue.id, issue.priority, issue.title);
+            println!("Next: {} [{}] {}", format_issue_id(issue.id), issue.priority, issue.title);
             if let Some(parent_id) = issue.parent_id {
-                println!("       (subissue of #{})", parent_id);
+                println!("       (subissue of {})", format_issue_id(parent_id));
             }
         } else {
             println!("No issues ready to work on.");
@@ -84,7 +94,7 @@ pub fn run(db: &Database) -> Result<()> {
 
     // Recommend the top issue
     let (top, _score, progress) = &scored[0];
-    println!("Next: #{} [{}] {}", top.id, top.priority, top.title);
+    println!("Next: {} [{}] {}", format_issue_id(top.id), top.priority, top.title);
 
     if let Some((closed, total)) = progress {
         println!("       Progress: {}/{} subissues complete", closed, total);
@@ -111,8 +121,8 @@ pub fn run(db: &Database) -> Result<()> {
                 None => String::new(),
             };
             println!(
-                "  #{} [{}] {}{}",
-                issue.id, issue.priority, issue.title, progress_str
+                "  {} [{}] {}{}",
+                format_issue_id(issue.id), issue.priority, issue.title, progress_str
             );
         }
     }
@@ -126,11 +136,13 @@ mod tests {
     use proptest::prelude::*;
     use tempfile::tempdir;
 
-    fn setup_test_db() -> (Database, tempfile::TempDir) {
+    fn setup_test_db() -> (Database, std::path::PathBuf, tempfile::TempDir) {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
         let db = Database::open(&db_path).unwrap();
-        (db, dir)
+        let chainlink_dir = dir.path().join(".chainlink");
+        std::fs::create_dir_all(&chainlink_dir).unwrap();
+        (db, chainlink_dir, dir)
     }
 
     #[test]
@@ -160,18 +172,18 @@ mod tests {
 
     #[test]
     fn test_run_no_issues() {
-        let (db, _dir) = setup_test_db();
-        run(&db).unwrap();
+        let (db, cl, _dir) = setup_test_db();
+        run(&db, &cl).unwrap();
         let ready = db.list_ready_issues().unwrap();
         assert!(ready.is_empty());
     }
 
     #[test]
     fn test_run_with_issues() {
-        let (db, _dir) = setup_test_db();
+        let (db, cl, _dir) = setup_test_db();
         let id = db.create_issue("Issue 1", None, "high").unwrap();
 
-        run(&db).unwrap();
+        run(&db, &cl).unwrap();
         let ready = db.list_ready_issues().unwrap();
         assert_eq!(ready.len(), 1);
         assert_eq!(ready[0].id, id);
@@ -179,20 +191,18 @@ mod tests {
 
     #[test]
     fn test_run_prioritizes_higher() {
-        let (db, _dir) = setup_test_db();
+        let (db, cl, _dir) = setup_test_db();
         db.create_issue("Low priority", None, "low").unwrap();
         let critical_id = db
             .create_issue("Critical priority", None, "critical")
             .unwrap();
         db.create_issue("Medium priority", None, "medium").unwrap();
 
-        run(&db).unwrap();
-        // Verify the critical issue has the highest weight via the scoring function
+        run(&db, &cl).unwrap();
         let ready = db.list_ready_issues().unwrap();
         assert_eq!(ready.len(), 3);
         let critical = ready.iter().find(|i| i.id == critical_id).unwrap();
         assert_eq!(critical.priority, "critical");
-        // Critical should have highest weight
         assert_eq!(priority_weight("critical"), 4);
         assert!(priority_weight("critical") > priority_weight("low"));
         assert!(priority_weight("critical") > priority_weight("medium"));
@@ -200,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_calculate_progress_no_subissues() {
-        let (db, _dir) = setup_test_db();
+        let (db, _cl, _dir) = setup_test_db();
         let id = db.create_issue("Simple issue", None, "medium").unwrap();
         let issue = db.get_issue(id).unwrap().unwrap();
 
@@ -210,7 +220,7 @@ mod tests {
 
     #[test]
     fn test_calculate_progress_with_subissues() {
-        let (db, _dir) = setup_test_db();
+        let (db, _cl, _dir) = setup_test_db();
         let parent_id = db.create_issue("Parent", None, "high").unwrap();
         let child1 = db
             .create_subissue(parent_id, "Child 1", None, "medium")
@@ -230,12 +240,12 @@ mod tests {
 
     #[test]
     fn test_run_skips_blocked() {
-        let (db, _dir) = setup_test_db();
+        let (db, cl, _dir) = setup_test_db();
         let blocker = db.create_issue("Blocker", None, "high").unwrap();
         let blocked = db.create_issue("Blocked", None, "critical").unwrap();
         db.add_dependency(blocked, blocker).unwrap();
 
-        run(&db).unwrap();
+        run(&db, &cl).unwrap();
         let ready = db.list_ready_issues().unwrap();
         assert!(
             !ready.iter().any(|i| i.id == blocked),
@@ -249,11 +259,11 @@ mod tests {
 
     #[test]
     fn test_run_all_issues_closed() {
-        let (db, _dir) = setup_test_db();
+        let (db, cl, _dir) = setup_test_db();
         let id = db.create_issue("Done", None, "medium").unwrap();
         db.close_issue(id).unwrap();
 
-        run(&db).unwrap();
+        run(&db, &cl).unwrap();
         let ready = db.list_ready_issues().unwrap();
         assert!(
             ready.is_empty(),
@@ -270,11 +280,11 @@ mod tests {
 
         #[test]
         fn prop_run_never_panics(count in 0usize..5) {
-            let (db, _dir) = setup_test_db();
+            let (db, cl, _dir) = setup_test_db();
             for i in 0..count {
                 db.create_issue(&format!("Issue {}", i), None, "medium").unwrap();
             }
-            let result = run(&db);
+            let result = run(&db, &cl);
             prop_assert!(result.is_ok());
         }
     }

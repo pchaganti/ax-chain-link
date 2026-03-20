@@ -1,7 +1,34 @@
-//! Build script to track include_str! dependencies.
-//! This ensures cargo rebuilds when template files change.
+//! Build script to track include_str! dependencies and
+//! auto-generate rule file includes from resources/chainlink/rules/.
+
+use std::fs;
+use std::io::Write;
+use std::path::Path;
 
 fn main() {
+    // Inject git commit hash into the binary for `chainlink --version`
+    println!("cargo:rerun-if-changed=../.git/HEAD");
+    println!("cargo:rerun-if-changed=../.git/refs/");
+    if let Ok(output) = std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+    {
+        if output.status.success() {
+            let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let dirty = std::process::Command::new("git")
+                .args(["status", "--porcelain"])
+                .output()
+                .map(|o| !o.stdout.is_empty())
+                .unwrap_or(false);
+            let suffix = if dirty {
+                format!("{}+{}-dirty", env!("CARGO_PKG_VERSION"), hash)
+            } else {
+                format!("{}+{}", env!("CARGO_PKG_VERSION"), hash)
+            };
+            println!("cargo:rustc-env=CHAINLINK_VERSION={}", suffix);
+        }
+    }
+
     // Track claude resource files
     println!("cargo:rerun-if-changed=resources/claude/settings.json");
     println!("cargo:rerun-if-changed=resources/claude/hooks/prompt-guard.py");
@@ -12,33 +39,86 @@ fn main() {
     println!("cargo:rerun-if-changed=resources/claude/mcp/safe-fetch-server.py");
     println!("cargo:rerun-if-changed=resources/mcp.json");
 
-    // Track chainlink config and rules files
+    // Track chainlink config
     println!("cargo:rerun-if-changed=resources/chainlink/hook-config.json");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/global.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/project.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/rust.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/python.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/javascript.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/typescript.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/typescript-react.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/javascript-react.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/go.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/java.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/c.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/cpp.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/csharp.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/ruby.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/php.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/swift.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/kotlin.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/scala.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/zig.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/odin.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/elixir.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/elixir-phoenix.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/web.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/sanitize-patterns.txt");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/tracking-strict.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/tracking-normal.md");
-    println!("cargo:rerun-if-changed=resources/chainlink/rules/tracking-relaxed.md");
+
+    // Auto-discover and track all rule files in resources/chainlink/rules/
+    println!("cargo:rerun-if-changed=resources/chainlink/rules/");
+    let rules_dir = Path::new("resources/chainlink/rules");
+    if rules_dir.is_dir() {
+        if let Err(e) = generate_rules_file(rules_dir) {
+            eprintln!("cargo:warning=Failed to generate rules_gen.rs: {}", e);
+        }
+    }
+}
+
+fn generate_rules_file(rules_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let mut rule_entries: Vec<(String, String)> = Vec::new();
+
+    let mut entries: Vec<_> = fs::read_dir(rules_dir)?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            name.ends_with(".md") || name.ends_with(".txt")
+        })
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    for entry in entries {
+        let filename = entry.file_name().to_string_lossy().to_string();
+        let rel_path = format!("resources/chainlink/rules/{}", filename);
+        println!("cargo:rerun-if-changed={}", rel_path);
+
+        // Generate a const name from filename: quality.md -> RULE_QUALITY
+        let const_name = filename
+            .trim_end_matches(".md")
+            .trim_end_matches(".txt")
+            .to_uppercase()
+            .replace('-', "_");
+        let const_name = format!("RULE_{}", const_name);
+
+        rule_entries.push((filename, const_name));
+    }
+
+    // Generate rules_gen.rs with all includes and the RULE_FILES array
+    let out_dir = std::env::var("OUT_DIR")?;
+    let gen_path = Path::new(&out_dir).join("rules_gen.rs");
+    let mut gen_file = fs::File::create(&gen_path)?;
+
+    writeln!(
+        gen_file,
+        "// Auto-generated by build.rs — do not edit manually"
+    )?;
+    writeln!(gen_file, "// Generated from resources/chainlink/rules/")?;
+    writeln!(gen_file)?;
+
+    // Use absolute path for include_str! since OUT_DIR is deep in target/
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
+    let abs_rules_dir = Path::new(&manifest_dir).join("resources/chainlink/rules");
+
+    // Write include_str! constants
+    for (filename, const_name) in &rule_entries {
+        let abs_path = abs_rules_dir.join(filename);
+        // Use forward slashes for include_str! paths (works on all platforms)
+        let path_str = abs_path.display().to_string().replace('\\', "/");
+        writeln!(
+            gen_file,
+            "pub(crate) const {}: &str = include_str!(\"{}\");",
+            const_name, path_str
+        )?;
+    }
+
+    writeln!(gen_file)?;
+
+    // Write the RULE_FILES array
+    writeln!(
+        gen_file,
+        "pub(crate) const RULE_FILES: &[(&str, &str)] = &["
+    )?;
+    for (filename, const_name) in &rule_entries {
+        writeln!(gen_file, "    (\"{}\", {}),", filename, const_name)?;
+    }
+    writeln!(gen_file, "];")?;
+
+    Ok(())
 }
