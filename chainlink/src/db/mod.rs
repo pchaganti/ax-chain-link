@@ -18,8 +18,8 @@ use crate::models::Issue;
 
 const SCHEMA_VERSION: i32 = 13;
 
-/// Well-known relation types (for help text / display grouping).
-/// Any string is accepted as a relation type — these are just conventions.
+/// Well-known relation types. Unknown types are accepted with a warning;
+/// these are the recognized conventions.
 pub const WELL_KNOWN_RELATION_TYPES: &[&str] = &[
     "related",     // generic bidirectional link (default, backward compatible)
     "assumption",  // "shares underlying assumption" — concept clustering
@@ -65,11 +65,18 @@ pub fn validate_priority(priority: &str) -> Result<()> {
     }
 }
 
-/// Validate relation type: any non-empty string is accepted.
-/// Well-known types are just conventions, not enforced.
+/// Validate relation type: empty strings are rejected; unknown types emit a
+/// warning but are still accepted (warn-but-accept pattern).
 pub fn validate_relation_type(relation_type: &str) -> Result<()> {
     if relation_type.is_empty() {
         anyhow::bail!("Relation type cannot be empty");
+    }
+    if !WELL_KNOWN_RELATION_TYPES.contains(&relation_type) {
+        tracing::warn!(
+            "Unknown relation type '{}'. Known types: {}",
+            relation_type,
+            WELL_KNOWN_RELATION_TYPES.join(", ")
+        );
     }
     Ok(())
 }

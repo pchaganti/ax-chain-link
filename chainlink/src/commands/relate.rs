@@ -284,7 +284,7 @@ mod tests {
         let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
         let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
 
-        // Any non-empty string is a valid relation type
+        // Unknown types are accepted with a warning
         let result = add_typed(&db, id1, id2, "caused-by");
         assert!(result.is_ok());
 
