@@ -18,8 +18,9 @@ use crate::models::Issue;
 
 const SCHEMA_VERSION: i32 = 13;
 
-/// Valid relation types for typed issue links.
-pub const VALID_RELATION_TYPES: &[&str] = &[
+/// Well-known relation types (for help text / display grouping).
+/// Any string is accepted as a relation type — these are just conventions.
+pub const WELL_KNOWN_RELATION_TYPES: &[&str] = &[
     "related",     // generic bidirectional link (default, backward compatible)
     "assumption",  // "shares underlying assumption" — concept clustering
     "falsifies",   // "this evidence falsifies that assumption"
@@ -64,17 +65,13 @@ pub fn validate_priority(priority: &str) -> Result<()> {
     }
 }
 
-/// Validate that a relation type is known, returning an error if not.
+/// Validate relation type: any non-empty string is accepted.
+/// Well-known types are just conventions, not enforced.
 pub fn validate_relation_type(relation_type: &str) -> Result<()> {
-    if VALID_RELATION_TYPES.contains(&relation_type) {
-        Ok(())
-    } else {
-        anyhow::bail!(
-            "Invalid relation type '{}'. Valid values: {}",
-            relation_type,
-            VALID_RELATION_TYPES.join(", ")
-        )
+    if relation_type.is_empty() {
+        anyhow::bail!("Relation type cannot be empty");
     }
+    Ok(())
 }
 
 pub struct Database {

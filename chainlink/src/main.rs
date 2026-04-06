@@ -347,7 +347,7 @@ enum Commands {
         id: i64,
         /// Second issue ID
         related: i64,
-        /// Relation type: related, assumption, falsifies, derived
+        /// Relation type (any string, e.g. related, assumption, falsifies, derived, caused-by)
         #[arg(short = 't', long = "type", default_value = "related")]
         relation_type: String,
     },
@@ -608,7 +608,7 @@ enum IssueCommands {
         id: i64,
         /// Second issue ID
         related: i64,
-        /// Relation type: related, assumption, falsifies, derived
+        /// Relation type (any string, e.g. related, assumption, falsifies, derived, caused-by)
         #[arg(short = 't', long = "type", default_value = "related")]
         relation_type: String,
     },

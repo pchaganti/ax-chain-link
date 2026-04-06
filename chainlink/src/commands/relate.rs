@@ -279,14 +279,29 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_relation_type() {
+    fn test_custom_relation_type() {
         let (db, _dir) = setup_test_db();
         let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
         let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
 
-        let result = add_typed(&db, id1, id2, "bogus");
+        // Any non-empty string is a valid relation type
+        let result = add_typed(&db, id1, id2, "caused-by");
+        assert!(result.is_ok());
+
+        let relations = db.get_typed_relations(id1).unwrap();
+        assert_eq!(relations.len(), 1);
+        assert_eq!(relations[0].relation_type, "caused-by");
+    }
+
+    #[test]
+    fn test_empty_relation_type_rejected() {
+        let (db, _dir) = setup_test_db();
+        let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
+        let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
+
+        let result = add_typed(&db, id1, id2, "");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid relation type"));
+        assert!(result.unwrap_err().to_string().contains("empty"));
     }
 
     #[test]
