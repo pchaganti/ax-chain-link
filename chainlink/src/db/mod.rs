@@ -16,7 +16,15 @@ use std::path::Path;
 
 use crate::models::Issue;
 
-const SCHEMA_VERSION: i32 = 12;
+const SCHEMA_VERSION: i32 = 13;
+
+/// Valid relation types for typed issue links.
+pub const VALID_RELATION_TYPES: &[&str] = &[
+    "related",     // generic bidirectional link (default, backward compatible)
+    "assumption",  // "shares underlying assumption" — concept clustering
+    "falsifies",   // "this evidence falsifies that assumption"
+    "derived",     // "this conclusion was derived from that assumption"
+];
 
 /// Valid values for issue priority.
 pub const VALID_PRIORITIES: &[&str] = &["low", "medium", "high", "critical"];
@@ -52,6 +60,19 @@ pub fn validate_priority(priority: &str) -> Result<()> {
             "Invalid priority '{}'. Valid values: {}",
             priority,
             VALID_PRIORITIES.join(", ")
+        )
+    }
+}
+
+/// Validate that a relation type is known, returning an error if not.
+pub fn validate_relation_type(relation_type: &str) -> Result<()> {
+    if VALID_RELATION_TYPES.contains(&relation_type) {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "Invalid relation type '{}'. Valid values: {}",
+            relation_type,
+            VALID_RELATION_TYPES.join(", ")
         )
     }
 }
@@ -189,12 +210,13 @@ impl Database {
                     FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
                 );
 
-                -- Relations (related issues, bidirectional)
+                -- Relations (related issues, bidirectional, typed)
                 CREATE TABLE IF NOT EXISTS relations (
                     issue_id_1 INTEGER NOT NULL,
                     issue_id_2 INTEGER NOT NULL,
+                    relation_type TEXT NOT NULL DEFAULT 'related',
                     created_at TEXT NOT NULL,
-                    PRIMARY KEY (issue_id_1, issue_id_2),
+                    PRIMARY KEY (issue_id_1, issue_id_2, relation_type),
                     FOREIGN KEY (issue_id_1) REFERENCES issues(id) ON DELETE CASCADE,
                     FOREIGN KEY (issue_id_2) REFERENCES issues(id) ON DELETE CASCADE
                 );
@@ -303,6 +325,13 @@ impl Database {
             // Migration v12: Add agent_id column to sessions for multi-agent tracking
             if version < 12 {
                 self.migrate("ALTER TABLE sessions ADD COLUMN agent_id TEXT");
+            }
+
+            // Migration v13: Add relation_type column to relations for typed links
+            if version < 13 {
+                self.migrate(
+                    "ALTER TABLE relations ADD COLUMN relation_type TEXT NOT NULL DEFAULT 'related'",
+                );
             }
 
             self.conn

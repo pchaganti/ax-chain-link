@@ -347,6 +347,9 @@ enum Commands {
         id: i64,
         /// Second issue ID
         related: i64,
+        /// Relation type: related, assumption, falsifies, derived
+        #[arg(short = 't', long = "type", default_value = "related")]
+        relation_type: String,
     },
 
     /// Remove a relation (shortcut for `issue unrelate`)
@@ -356,12 +359,27 @@ enum Commands {
         id: i64,
         /// Second issue ID
         related: i64,
+        /// Relation type to remove
+        #[arg(short = 't', long = "type", default_value = "related")]
+        relation_type: String,
     },
 
     /// List related issues (shortcut for `issue related`)
     #[command(hide = true)]
     Related {
         /// Issue ID
+        id: i64,
+    },
+
+    /// Show falsification cascade — what breaks if this assumption is wrong
+    Cascade {
+        /// Issue ID to check cascade from
+        id: i64,
+    },
+
+    /// Mark an assumption as falsified and propagate to downstream issues
+    Falsify {
+        /// Issue ID of the falsified assumption
         id: i64,
     },
 
@@ -590,6 +608,9 @@ enum IssueCommands {
         id: i64,
         /// Second issue ID
         related: i64,
+        /// Relation type: related, assumption, falsifies, derived
+        #[arg(short = 't', long = "type", default_value = "related")]
+        relation_type: String,
     },
 
     /// Remove a relation between issues
@@ -598,11 +619,26 @@ enum IssueCommands {
         id: i64,
         /// Second issue ID
         related: i64,
+        /// Relation type to remove
+        #[arg(short = 't', long = "type", default_value = "related")]
+        relation_type: String,
     },
 
     /// List related issues
     Related {
         /// Issue ID
+        id: i64,
+    },
+
+    /// Show falsification cascade — what breaks if this assumption is wrong
+    Cascade {
+        /// Issue ID to check cascade from
+        id: i64,
+    },
+
+    /// Mark an assumption as falsified and propagate to downstream issues
+    Falsify {
+        /// Issue ID of the falsified assumption
         id: i64,
     },
 
@@ -1112,19 +1148,37 @@ fn dispatch_issue(action: IssueCommands, quiet: bool, json: bool) -> Result<()> 
             commands::deps::list_ready(&db)
         }
 
-        IssueCommands::Relate { id, related } => {
+        IssueCommands::Relate {
+            id,
+            related,
+            relation_type,
+        } => {
             let db = get_db()?;
-            commands::relate::add(&db, id, related)
+            commands::relate::add_typed(&db, id, related, &relation_type)
         }
 
-        IssueCommands::Unrelate { id, related } => {
+        IssueCommands::Unrelate {
+            id,
+            related,
+            relation_type,
+        } => {
             let db = get_db()?;
-            commands::relate::remove(&db, id, related)
+            commands::relate::remove_typed(&db, id, related, &relation_type)
         }
 
         IssueCommands::Related { id } => {
             let db = get_db()?;
             commands::relate::list(&db, id)
+        }
+
+        IssueCommands::Cascade { id } => {
+            let db = get_db()?;
+            commands::relate::cascade(&db, id)
+        }
+
+        IssueCommands::Falsify { id } => {
+            let db = get_db()?;
+            commands::relate::falsify(&db, id)
         }
 
         IssueCommands::Next => {
@@ -1332,15 +1386,39 @@ fn run() -> Result<()> {
 
         Commands::Ready => dispatch_issue(IssueCommands::Ready, quiet, json),
 
-        Commands::Relate { id, related } => {
-            dispatch_issue(IssueCommands::Relate { id, related }, quiet, json)
-        }
+        Commands::Relate {
+            id,
+            related,
+            relation_type,
+        } => dispatch_issue(
+            IssueCommands::Relate {
+                id,
+                related,
+                relation_type,
+            },
+            quiet,
+            json,
+        ),
 
-        Commands::Unrelate { id, related } => {
-            dispatch_issue(IssueCommands::Unrelate { id, related }, quiet, json)
-        }
+        Commands::Unrelate {
+            id,
+            related,
+            relation_type,
+        } => dispatch_issue(
+            IssueCommands::Unrelate {
+                id,
+                related,
+                relation_type,
+            },
+            quiet,
+            json,
+        ),
 
         Commands::Related { id } => dispatch_issue(IssueCommands::Related { id }, quiet, json),
+
+        Commands::Cascade { id } => dispatch_issue(IssueCommands::Cascade { id }, quiet, json),
+
+        Commands::Falsify { id } => dispatch_issue(IssueCommands::Falsify { id }, quiet, json),
 
         Commands::Next => dispatch_issue(IssueCommands::Next, quiet, json),
 
