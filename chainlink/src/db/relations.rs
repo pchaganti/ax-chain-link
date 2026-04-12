@@ -55,6 +55,7 @@ impl Database {
     }
 
     /// Backward-compatible: remove a "related" relation.
+    #[allow(dead_code)]
     pub fn remove_relation(&self, issue_id_1: i64, issue_id_2: i64) -> Result<bool> {
         self.remove_typed_relation(issue_id_1, issue_id_2, "related")
     }

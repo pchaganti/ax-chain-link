@@ -3,6 +3,7 @@ use anyhow::Result;
 use crate::db::{validate_relation_type, Database};
 use crate::utils::format_issue_id;
 
+#[allow(dead_code)]
 pub fn add(db: &Database, issue_id: i64, related_id: i64) -> Result<()> {
     add_typed(db, issue_id, related_id, "related")
 }
@@ -31,6 +32,7 @@ pub fn add_typed(db: &Database, issue_id: i64, related_id: i64, relation_type: &
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn remove(db: &Database, issue_id: i64, related_id: i64) -> Result<()> {
     remove_typed(db, issue_id, related_id, "related")
 }
@@ -163,7 +165,9 @@ pub fn falsify(db: &Database, issue_id: i64) -> Result<()> {
     // Close the issue
     db.close_issue(issue_id)?;
 
-    let issue = db.get_issue(issue_id)?.unwrap();
+    let issue = db
+        .get_issue(issue_id)?
+        .ok_or_else(|| anyhow::anyhow!("Issue {} not found", issue_id))?;
     println!("Falsified {}: {}", format_issue_id(issue_id), issue.title);
 
     // Add audit comment
