@@ -7,12 +7,7 @@ pub fn add(db: &Database, issue_id: i64, related_id: i64) -> Result<()> {
     add_typed(db, issue_id, related_id, "related")
 }
 
-pub fn add_typed(
-    db: &Database,
-    issue_id: i64,
-    related_id: i64,
-    relation_type: &str,
-) -> Result<()> {
+pub fn add_typed(db: &Database, issue_id: i64, related_id: i64, relation_type: &str) -> Result<()> {
     validate_relation_type(relation_type)?;
     db.require_issue(issue_id)?;
     db.require_issue(related_id)?;
@@ -169,11 +164,7 @@ pub fn falsify(db: &Database, issue_id: i64) -> Result<()> {
     db.close_issue(issue_id)?;
 
     let issue = db.get_issue(issue_id)?.unwrap();
-    println!(
-        "Falsified {}: {}",
-        format_issue_id(issue_id),
-        issue.title
-    );
+    println!("Falsified {}: {}", format_issue_id(issue_id), issue.title);
 
     // Add audit comment
     db.add_comment(
@@ -420,7 +411,9 @@ mod tests {
         let root = db.create_issue("Root assumption", None, "high").unwrap();
         let child1 = db.create_subissue(root, "Why 1", None, "medium").unwrap();
         let child2 = db.create_subissue(root, "Why 2", None, "medium").unwrap();
-        let grandchild = db.create_subissue(child1, "Why 1.1", None, "medium").unwrap();
+        let grandchild = db
+            .create_subissue(child1, "Why 1.1", None, "medium")
+            .unwrap();
 
         let affected = db.falsification_cascade(root).unwrap();
         let affected_ids: Vec<i64> = affected.iter().map(|i| i.id).collect();
@@ -435,9 +428,12 @@ mod tests {
     fn test_falsification_cascade_derived_relations() {
         let (db, _dir) = setup_test_db();
         let assumption = db.create_issue("Core assumption", None, "high").unwrap();
-        let conclusion = db.create_issue("Conclusion built on assumption", None, "medium").unwrap();
+        let conclusion = db
+            .create_issue("Conclusion built on assumption", None, "medium")
+            .unwrap();
 
-        db.add_typed_relation(assumption, conclusion, "derived").unwrap();
+        db.add_typed_relation(assumption, conclusion, "derived")
+            .unwrap();
 
         let affected = db.falsification_cascade(assumption).unwrap();
         assert_eq!(affected.len(), 1);
@@ -448,8 +444,12 @@ mod tests {
     fn test_falsification_cascade_assumption_one_hop() {
         let (db, _dir) = setup_test_db();
         let a1 = db.create_issue("Assumption A", None, "high").unwrap();
-        let a2 = db.create_issue("Assumption B (shared)", None, "medium").unwrap();
-        let a3 = db.create_issue("Assumption C (shared with B)", None, "medium").unwrap();
+        let a2 = db
+            .create_issue("Assumption B (shared)", None, "medium")
+            .unwrap();
+        let a3 = db
+            .create_issue("Assumption C (shared with B)", None, "medium")
+            .unwrap();
 
         db.add_typed_relation(a1, a2, "assumption").unwrap();
         db.add_typed_relation(a2, a3, "assumption").unwrap();
@@ -466,7 +466,9 @@ mod tests {
     fn test_falsify_command() {
         let (db, _dir) = setup_test_db();
         let root = db.create_issue("Bad assumption", None, "high").unwrap();
-        let child = db.create_subissue(root, "Built on bad assumption", None, "medium").unwrap();
+        let child = db
+            .create_subissue(root, "Built on bad assumption", None, "medium")
+            .unwrap();
 
         falsify(&db, root).unwrap();
 

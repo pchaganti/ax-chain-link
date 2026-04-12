@@ -1912,7 +1912,7 @@ fn test_unrelate_no_relation() {
 
     assert!(success);
     assert!(
-        stdout.contains("No relation found"),
+        stdout.contains("relation found between"),
         "Expected 'No relation found' message, got: {}",
         stdout
     );

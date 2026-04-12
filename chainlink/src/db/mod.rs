@@ -21,10 +21,10 @@ const SCHEMA_VERSION: i32 = 13;
 /// Well-known relation types. Unknown types are accepted with a warning;
 /// these are the recognized conventions.
 pub const WELL_KNOWN_RELATION_TYPES: &[&str] = &[
-    "related",     // generic bidirectional link (default, backward compatible)
-    "assumption",  // "shares underlying assumption" — concept clustering
-    "falsifies",   // "this evidence falsifies that assumption"
-    "derived",     // "this conclusion was derived from that assumption"
+    "related",    // generic bidirectional link (default, backward compatible)
+    "assumption", // "shares underlying assumption" — concept clustering
+    "falsifies",  // "this evidence falsifies that assumption"
+    "derived",    // "this conclusion was derived from that assumption"
 ];
 
 /// Valid values for issue priority.
