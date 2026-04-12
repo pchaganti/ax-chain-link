@@ -16,6 +16,7 @@ struct IssueDetail {
     blocking: Vec<i64>,
     subissues: Vec<crate::models::Issue>,
     related: Vec<crate::models::Issue>,
+    relations: Vec<crate::models::Relation>,
 }
 
 pub fn run_json(db: &Database, id: i64) -> Result<()> {
@@ -33,6 +34,7 @@ pub fn run_json(db: &Database, id: i64) -> Result<()> {
         blocking: db.get_blocking(id)?,
         subissues: db.get_subissues(id)?,
         related: db.get_related_issues(id)?,
+        relations: db.get_typed_relations(id)?,
     };
 
     println!("{}", serde_json::to_string_pretty(&detail)?);
@@ -130,19 +132,39 @@ pub fn run(db: &Database, id: i64) -> Result<()> {
         }
     }
 
-    // Related issues
-    let related = db.get_related_issues(id)?;
-    if !related.is_empty() {
-        println!("\nRelated:");
-        for rel in related {
-            let status_marker = if rel.status == "closed" { "✓" } else { " " };
-            println!(
-                "  {} [{}] {} - {}",
-                format_issue_id(rel.id),
-                status_marker,
-                rel.priority,
-                rel.title
-            );
+    // Related issues (grouped by type)
+    let relations = db.get_typed_relations(id)?;
+    if !relations.is_empty() {
+        println!("\nRelations:");
+
+        let mut by_type: std::collections::BTreeMap<String, Vec<i64>> =
+            std::collections::BTreeMap::new();
+        for rel in &relations {
+            let other_id = if rel.issue_id_1 == id {
+                rel.issue_id_2
+            } else {
+                rel.issue_id_1
+            };
+            by_type
+                .entry(rel.relation_type.clone())
+                .or_default()
+                .push(other_id);
+        }
+
+        for (rel_type, ids) in &by_type {
+            println!("  [{}]:", rel_type);
+            for &other_id in ids {
+                if let Some(other) = db.get_issue(other_id)? {
+                    let status_marker = if other.status == "closed" { "✓" } else { " " };
+                    println!(
+                        "    {} [{}] {} - {}",
+                        format_issue_id(other.id),
+                        status_marker,
+                        other.priority,
+                        other.title
+                    );
+                }
+            }
         }
     }
 

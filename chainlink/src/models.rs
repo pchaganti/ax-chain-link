@@ -59,6 +59,14 @@ pub struct TokenUsage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Relation {
+    pub issue_id_1: i64,
+    pub issue_id_2: i64,
+    pub relation_type: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Milestone {
     pub id: i64,
     pub name: String,
