@@ -54,12 +54,6 @@ impl Database {
         Ok(rows > 0)
     }
 
-    /// Backward-compatible: remove a "related" relation.
-    #[allow(dead_code)]
-    pub fn remove_relation(&self, issue_id_1: i64, issue_id_2: i64) -> Result<bool> {
-        self.remove_typed_relation(issue_id_1, issue_id_2, "related")
-    }
-
     /// Get all related issues (any relation type).
     pub fn get_related_issues(&self, issue_id: i64) -> Result<Vec<Issue>> {
         let mut stmt = self.conn.prepare(

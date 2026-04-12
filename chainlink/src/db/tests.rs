@@ -570,7 +570,7 @@ fn test_remove_relation() {
     let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
 
     db.add_relation(id1, id2).unwrap();
-    db.remove_relation(id1, id2).unwrap();
+    db.remove_typed_relation(id1, id2, "related").unwrap();
 
     let related = db.get_related_issues(id1).unwrap();
     assert!(related.is_empty());

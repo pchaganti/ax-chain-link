@@ -3,11 +3,6 @@ use anyhow::Result;
 use crate::db::{validate_relation_type, Database};
 use crate::utils::format_issue_id;
 
-#[allow(dead_code)]
-pub fn add(db: &Database, issue_id: i64, related_id: i64) -> Result<()> {
-    add_typed(db, issue_id, related_id, "related")
-}
-
 pub fn add_typed(db: &Database, issue_id: i64, related_id: i64, relation_type: &str) -> Result<()> {
     validate_relation_type(relation_type)?;
     db.require_issue(issue_id)?;
@@ -30,11 +25,6 @@ pub fn add_typed(db: &Database, issue_id: i64, related_id: i64, relation_type: &
     }
 
     Ok(())
-}
-
-#[allow(dead_code)]
-pub fn remove(db: &Database, issue_id: i64, related_id: i64) -> Result<()> {
-    remove_typed(db, issue_id, related_id, "related")
 }
 
 pub fn remove_typed(
@@ -234,7 +224,7 @@ mod tests {
         let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
         let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
 
-        let result = add(&db, id1, id2);
+        let result = add_typed(&db, id1, id2, "related");
         assert!(result.is_ok());
 
         let related = db.get_related_issues(id1).unwrap();
@@ -305,7 +295,7 @@ mod tests {
         let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
         let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
 
-        add(&db, id1, id2).unwrap();
+        add_typed(&db, id1, id2, "related").unwrap();
 
         let related1 = db.get_related_issues(id1).unwrap();
         let related2 = db.get_related_issues(id2).unwrap();
@@ -318,7 +308,7 @@ mod tests {
         let (db, _dir) = setup_test_db();
         let id = db.create_issue("Issue 1", None, "medium").unwrap();
 
-        let result = add(&db, id, 99999);
+        let result = add_typed(&db, id, 99999, "related");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -329,8 +319,8 @@ mod tests {
         let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
         let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
 
-        add(&db, id1, id2).unwrap();
-        let result = add(&db, id1, id2);
+        add_typed(&db, id1, id2, "related").unwrap();
+        let result = add_typed(&db, id1, id2, "related");
         assert!(result.is_ok());
 
         let related = db.get_related_issues(id1).unwrap();
@@ -343,8 +333,8 @@ mod tests {
         let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
         let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
 
-        add(&db, id1, id2).unwrap();
-        let result = remove(&db, id1, id2);
+        add_typed(&db, id1, id2, "related").unwrap();
+        let result = remove_typed(&db, id1, id2, "related");
         assert!(result.is_ok());
 
         let related = db.get_related_issues(id1).unwrap();
@@ -374,7 +364,7 @@ mod tests {
         let id1 = db.create_issue("Issue 1", None, "medium").unwrap();
         let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
 
-        let result = remove(&db, id1, id2);
+        let result = remove_typed(&db, id1, id2, "related");
         assert!(result.is_ok());
     }
 
@@ -385,8 +375,8 @@ mod tests {
         let id2 = db.create_issue("Issue 2", None, "medium").unwrap();
         let id3 = db.create_issue("Issue 3", None, "medium").unwrap();
 
-        add(&db, id1, id2).unwrap();
-        add(&db, id1, id3).unwrap();
+        add_typed(&db, id1, id2, "related").unwrap();
+        add_typed(&db, id1, id3, "related").unwrap();
 
         let result = list(&db, id1);
         assert!(result.is_ok());
